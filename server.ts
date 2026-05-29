@@ -69,7 +69,7 @@ interface Room {
   timerIntervalId: NodeJS.Timeout | null;
 }
 
-const playlistsPath = path.join(process.cwd(), "src", "playlists.json");
+const playlistsPath = path.join(process.cwd(), "playlists.json");
 let playlistsData: any = { default: [], swedish: [], millennium: [] };
 try {
   playlistsData = JSON.parse(fs.readFileSync(playlistsPath, "utf8"));

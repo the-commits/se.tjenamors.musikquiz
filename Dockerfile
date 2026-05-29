@@ -25,6 +25,7 @@ RUN npm install --omit=dev
 
 # Copy the built assets
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/playlists.json ./
 
 # Set environment to production
 ENV NODE_ENV=production
