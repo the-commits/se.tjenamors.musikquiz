@@ -47,6 +47,38 @@ export default function App() {
       setRole('player');
     }
   }, []);
+  // Screen Wake Lock to prevent phone sleeping during quiz
+  useEffect(() => {
+    let wakeLock: any = null;
+    
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && role !== 'landing') {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.error('Wake Lock error:', err);
+      }
+    };
+    
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && role !== 'landing') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [role]);
+
 
   // Sync state correctly if role turns to landing
   const resetLocalConnection = () => {
