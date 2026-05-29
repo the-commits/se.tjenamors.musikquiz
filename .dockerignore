@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+playwright-report
+test-results
+.vscode
+.antigravity
+.git
+.gitignore
+README.md
