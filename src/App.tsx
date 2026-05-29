@@ -164,6 +164,13 @@ export default function App() {
     }
   };
 
+  // Host Action: Report unplayable song to DB and switch immediately
+  const handleHostReportUnplayable = (youtubeLink: string) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'host_report_unplayable', youtube_link: youtubeLink }));
+    }
+  };
+
   // Host Action: Choose visual presets and regenerate game list
   const handleSelectPreset = (presetName: string) => {
     handleHostCreate(presetName);
@@ -389,6 +396,7 @@ export default function App() {
                 <HostQuestion
                   roomState={roomState}
                   onRevealAnswer={handleHostRevealAnswer}
+                  onReportUnplayable={handleHostReportUnplayable}
                 />
               )}
 
@@ -396,6 +404,7 @@ export default function App() {
                 <HostReveal
                   roomState={roomState}
                   onNextQuestion={handleHostNextQuestion}
+                  onReportUnplayable={handleHostReportUnplayable}
                 />
               )}
 

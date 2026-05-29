@@ -5,8 +5,27 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import fs from "fs";
+import sqlite3 from "sqlite3";
+import { open, Database } from "sqlite";
 
 dotenv.config();
+
+let db: Database;
+// Initialize SQLite DB
+async function initDb() {
+  db = await open({
+    filename: './songs.db',
+    driver: sqlite3.Database
+  });
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS songs (
+      youtube_link TEXT PRIMARY KEY,
+      playable INTEGER DEFAULT 1
+    )
+  `);
+}
+initDb();
 
 // Define Types inside the Server directly or import them
 interface Question {
@@ -38,6 +57,7 @@ interface Room {
   status: RoomStatus;
   players: Player[];
   questions: Question[];
+  backupQuestions: Question[];
   currentQuestionIndex: number;
   questionTimer: number;
   questionDuration: number;
@@ -49,167 +69,19 @@ interface Room {
   timerIntervalId: NodeJS.Timeout | null;
 }
 
-const DEFAULT_QUESTIONS: Question[] = [
-  {
-    id: "q1",
-    artist: "ABBA",
-    title: "Mamma Mia",
-    youtube_link: "unfzfe8f9NI",
-    start_time: 32,
-    options: ["Dancing Queen", "Mamma Mia", "Waterloo", "Gimme! Gimme! Gimme!"],
-    correct_index: 1,
-  },
-  {
-    id: "q2",
-    artist: "Avicii",
-    title: "Wake Me Up",
-    youtube_link: "IcrbM1l_zqI",
-    start_time: 30,
-    options: ["Hey Brother", "Levels", "Wake Me Up", "The Nights"],
-    correct_index: 2,
-  },
-  {
-    id: "q3",
-    artist: "Loreen",
-    title: "Tattoo",
-    youtube_link: "b3vAtg_N_E0",
-    start_time: 54,
-    options: ["Euphoria", "Tattoo", "My Heart Is Refusing Me", "Statements"],
-    correct_index: 1,
-  },
-  {
-    id: "q4",
-    artist: "Gyllene Tider",
-    title: "Sommartider",
-    youtube_link: "W-YgAn0K1fE",
-    start_time: 10,
-    options: ["Sommartider", "Flickorna på TV2", "Här kommer alla känslorna", "Kung av sand"],
-    correct_index: 0,
-  },
-  {
-    id: "q5",
-    artist: "Queen",
-    title: "Bohemian Rhapsody",
-    youtube_link: "fJ9rUzIMcZQ",
-    start_time: 48,
-    options: ["We Will Rock You", "Don't Stop Me Now", "Bohemian Rhapsody", "Radio Ga Ga"],
-    correct_index: 2,
-  },
-  {
-    id: "q6",
-    artist: "Michael Jackson",
-    title: "Billie Jean",
-    youtube_link: "Zi_XLOBDo_Y",
-    start_time: 29,
-    options: ["Beat It", "Billie Jean", "Thriller", "Bad"],
-    correct_index: 1,
-  },
-  {
-    id: "q7",
-    artist: "Veronica Maggio",
-    title: "Jag kommer",
-    youtube_link: "O8Xm0tGshZg",
-    start_time: 20,
-    options: ["Hela huset", "Sergels torg", "Jag kommer", "Satan i gatan"],
-    correct_index: 2,
-  },
-  {
-    id: "q8",
-    artist: "Basshunter",
-    title: "Boten Anna",
-    youtube_link: "d50Xf3V-bQU",
-    start_time: 32,
-    options: ["Boten Anna", "Vi sitter i Ventrilo och spelar DotA", "Now You're Gone", "Angel in the Night"],
-    correct_index: 0,
-  },
-  {
-    id: "q9",
-    artist: "Bon Jovi",
-    title: "Livin' On A Prayer",
-    youtube_link: "lDK9QqIzhwk",
-    start_time: 78,
-    options: ["You Give Love A Bad Name", "Livin' On A Prayer", "It's My Life", "Runaway"],
-    correct_index: 1,
-  },
-  {
-    id: "q10",
-    artist: "Daft Punk",
-    title: "Get Lucky",
-    youtube_link: "5NV6Rdv1a3I",
-    start_time: 33,
-    options: ["One More Time", "Get Lucky", "Harder Better Faster Stronger", "Around the World"],
-    correct_index: 1,
-  }
-];
+const playlistsPath = path.join(process.cwd(), "src", "playlists.json");
+let playlistsData: any = { default: [], swedish: [], millennium: [] };
+try {
+  playlistsData = JSON.parse(fs.readFileSync(playlistsPath, "utf8"));
+} catch (e) {
+  console.warn("Could not load playlists.json", e);
+}
+
+const DEFAULT_QUESTIONS: Question[] = playlistsData.default || [];
 
 const PRESET_QUZZES: Record<string, Question[]> = {
-  "swedish": [
-    {
-      id: "s1",
-      artist: "Carola",
-      title: "Främling",
-      youtube_link: "7Fm92_Q_Hj8",
-      start_time: 34,
-      options: ["Främling", "Fångad av en stormvind", "Mickey", "Tommy tycker om mig"],
-      correct_index: 0
-    },
-    {
-      id: "s2",
-      artist: "Gyllene Tider",
-      title: "Sommartider",
-      youtube_link: "W-YgAn0K1fE",
-      start_time: 10,
-      options: ["Här kommer alla känslorna", "Flickorna på TV2", "Sommartider", "Ljudet av ett annat hjärta"],
-      correct_index: 2
-    },
-    {
-      id: "s3",
-      artist: "Ted Gärdestad",
-      title: "Sol, vind och vatten",
-      youtube_link: "G80dD9C96D0",
-      start_time: 42,
-      options: ["Jag vill ha en egen måne", "Sol, vind och vatten", "Satellit", "Himlen är oskyldigt blå"],
-      correct_index: 1
-    },
-    {
-      id: "s4",
-      artist: "Veronica Maggio",
-      title: "Jag kommer",
-      youtube_link: "O8Xm0tGshZg",
-      start_time: 20,
-      options: ["Hela huset", "Sergels torg", "Satan i gatan", "Jag kommer"],
-      correct_index: 3
-    }
-  ],
-  "millennium": [
-    {
-      id: "m1",
-      artist: "Britney Spears",
-      title: "...Baby One More Time",
-      youtube_link: "C-u5WLJ9Yk4",
-      start_time: 44,
-      options: ["Oops!... I Did It Again", "...Baby One More Time", "Toxic", "Lucky"],
-      correct_index: 1
-    },
-    {
-      id: "m2",
-      artist: "Eminem",
-      title: "Without Me",
-      youtube_link: "YVkUvmDQ3HY",
-      start_time: 28,
-      options: ["The Real Slim Shady", "Without Me", "Lose Yourself", "Mockingbird"],
-      correct_index: 1
-    },
-    {
-      id: "m3",
-      artist: "Beyoncé",
-      title: "Crazy In Love",
-      youtube_link: "ViwtNLUqkMY",
-      start_time: 40,
-      options: ["Crazy In Love", "Baby Boy", "Single Ladies", "Irreplaceable"],
-      correct_index: 0
-    }
-  ]
+  swedish: playlistsData.swedish || [],
+  millennium: playlistsData.millennium || []
 };
 
 const rooms = new Map<string, Room>();
@@ -448,6 +320,10 @@ En array av objekt med följande tvingade fält:
             // We only need to enrich default/preset questions since AI ones are already enriched
             if (!message.customQuestions) {
               finalQuestions = await Promise.all(finalQuestions.map((q) => enrichWithItunes({ ...q })));
+              // Filter out known unplayable songs
+              const unplayableRows = await db.all('SELECT youtube_link FROM songs WHERE playable = 0');
+              const unplayableSet = new Set(unplayableRows.map(r => r.youtube_link));
+              finalQuestions = finalQuestions.filter(q => !q.youtube_link || !unplayableSet.has(q.youtube_link));
             }
 
             // Shuffle questions and options
@@ -461,11 +337,15 @@ En array av objekt med följande tvingade fält:
               return newQ;
             });
 
+            const questions = finalQuestions.slice(0, 10);
+            const backupQuestions = finalQuestions.slice(10);
+
             const newRoom: Room = {
               code,
               status: 'lobby',
               players: [],
-              questions: finalQuestions,
+              questions: questions,
+              backupQuestions: backupQuestions,
               currentQuestionIndex: 0,
               questionTimer: 25,
               questionDuration: message.duration || 25,
@@ -486,6 +366,29 @@ En array av objekt med följande tvingade fält:
             }));
 
             sendRoomState(newRoom);
+            break;
+          }
+
+          case "host_report_unplayable": {
+            if (!isHostConnection || !currentRoomCode) return;
+            const room = rooms.get(currentRoomCode);
+            if (!room) return;
+
+            const youtubeLink = message.youtube_link;
+            if (youtubeLink) {
+              console.log(`[Host Report] Song unplayable, marking in DB: ${youtubeLink}`);
+              // Insert or update DB
+              await db.run('INSERT OR REPLACE INTO songs (youtube_link, playable) VALUES (?, 0)', [youtubeLink]);
+              
+              // Find the current question and replace it with the next one from backup if available
+              if (room.backupQuestions && room.backupQuestions.length > 0) {
+                const replacement = room.backupQuestions.shift()!;
+                room.questions[room.currentQuestionIndex] = replacement;
+                console.log(`[Host Report] Replaced question with: ${replacement.title}`);
+                // Re-broadcast state so the client reloads the YouTube iframe
+                sendRoomState(room);
+              }
+            }
             break;
           }
 

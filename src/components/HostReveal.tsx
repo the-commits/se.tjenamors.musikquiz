@@ -7,9 +7,10 @@ import { RoomState } from '../types';
 interface HostRevealProps {
   roomState: RoomState;
   onNextQuestion: () => void;
+  onReportUnplayable?: (youtubeLink: string) => void;
 }
 
-export default function HostReveal({ roomState, onNextQuestion }: HostRevealProps) {
+export default function HostReveal({ roomState, onNextQuestion, onReportUnplayable }: HostRevealProps) {
   const currentQuestion = roomState.questions[roomState.currentQuestionIndex];
   const correctOptionIndex = currentQuestion.correct_index;
   const correctOptionText = currentQuestion.options[correctOptionIndex];
@@ -22,6 +23,9 @@ export default function HostReveal({ roomState, onNextQuestion }: HostRevealProp
   const handleVideoError = (event: YouTubeEvent) => {
     console.error("YouTube Player Error in Reveal:", event.data);
     setHasVideoError(true);
+    if (onReportUnplayable && currentQuestion?.youtube_link) {
+      onReportUnplayable(currentQuestion.youtube_link);
+    }
   };
 
   return (

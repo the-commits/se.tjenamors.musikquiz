@@ -7,9 +7,10 @@ import { RoomState } from '../types';
 interface HostQuestionProps {
   roomState: RoomState;
   onRevealAnswer: () => void;
+  onReportUnplayable?: (youtubeLink: string) => void;
 }
 
-export default function HostQuestion({ roomState, onRevealAnswer }: HostQuestionProps) {
+export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplayable }: HostQuestionProps) {
   const currentQuestion = roomState.questions[roomState.currentQuestionIndex];
   const timerRatio = roomState.questionTimer / roomState.questionDuration;
 
@@ -23,6 +24,9 @@ export default function HostQuestion({ roomState, onRevealAnswer }: HostQuestion
   const handleVideoError = (event: YouTubeEvent) => {
     console.error("YouTube Player Error:", event.data);
     setHasVideoError(true);
+    if (onReportUnplayable && currentQuestion?.youtube_link) {
+      onReportUnplayable(currentQuestion.youtube_link);
+    }
   };
 
   const shapes = [
