@@ -232,11 +232,10 @@ export default function App() {
       <div className="absolute top-1/2 -right-24 w-80 h-80 bg-cyan-500 rounded-full mix-blend-screen filter blur-[100px] opacity-20 pointer-events-none" />
       
       {/* Global Navbar */}
-      <header className="h-20 lg:h-24 px-6 lg:px-12 flex justify-between items-center z-30 sticky top-0 border-b border-white/10 bg-white/5 backdrop-blur-md select-none">
+      <header className="header-navbar h-20 lg:h-24 px-6 lg:px-12 flex justify-between items-center z-30 sticky top-0 border-b border-white/10 bg-white/5 backdrop-blur-md select-none">
         <div className="flex items-center gap-3 cursor-pointer" onClick={resetLocalConnection}>
           <div 
-            className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-lg overflow-hidden bg-cover bg-center transform -rotate-6"
-            style={{ backgroundImage: "url('/logo.png')" }}
+            className="logo-container w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-lg overflow-hidden transform -rotate-6"
           >
             <Music className="w-5 h-5 lg:w-6 lg:h-6 text-white drop-shadow-md" />
           </div>
