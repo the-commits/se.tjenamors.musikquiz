@@ -41,7 +41,7 @@ export default function PlayerJoin({ onJoin, error, initialRoomCode = '' }: Play
           className="w-24 h-24 mx-auto mb-6 flex items-center justify-center shadow-xl shadow-pink-500/20 rounded-[28px] overflow-hidden border border-white/10 bg-cover bg-center"
           style={{ backgroundImage: "url('/logo.png')" }}
         >
-          <Music className="w-10 h-10 text-white fill-current drop-shadow-lg" />
+          <Music className="w-10 h-10 text-white drop-shadow-lg" />
         </div>
         <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter italic">Tjenamors Musikquiz!</h1>
         <p className="text-indigo-200 font-medium text-base mt-2">

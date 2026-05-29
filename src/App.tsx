@@ -313,7 +313,7 @@ export default function App() {
                 >
                   <div className="flex justify-between items-start">
                     <div className="w-14 h-14 bg-cyan-500/20 rounded-2xl flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white transition-all">
-                      <Music className="w-7 h-7 fill-current" />
+                      <Music className="w-7 h-7" />
                     </div>
                     <ArrowRight className="w-6 h-6 text-indigo-400 group-hover:text-white group-hover:translate-x-2 transition-all duration-300" />
                   </div>
