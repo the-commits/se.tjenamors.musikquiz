@@ -262,6 +262,15 @@ async function enrichWithItunes(q: Question): Promise<Question> {
   return q;
 }
 
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function generateRoomCode(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   let code = "";
@@ -440,6 +449,17 @@ En array av objekt med följande tvingade fält:
             if (!message.customQuestions) {
               finalQuestions = await Promise.all(finalQuestions.map((q) => enrichWithItunes({ ...q })));
             }
+
+            // Shuffle questions and options
+            finalQuestions = shuffleArray(finalQuestions).map((q: Question) => {
+              const newQ = { ...q };
+              if (newQ.options && newQ.options.length > 0) {
+                const correctOptionStr = newQ.options[newQ.correct_index];
+                newQ.options = shuffleArray(newQ.options);
+                newQ.correct_index = newQ.options.indexOf(correctOptionStr);
+              }
+              return newQ;
+            });
 
             const newRoom: Room = {
               code,
@@ -732,7 +752,7 @@ En array av objekt med följande tvingade fält:
     });
   }
 
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Musikquiz full-stack server listening on http://localhost:${PORT}`);
   });
