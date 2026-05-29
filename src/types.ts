@@ -20,7 +20,7 @@ export interface Player {
   color: string; // Visual tag color
 }
 
-export type RoomStatus = 'lobby' | 'countdown' | 'question' | 'slow_reveal' | 'scoreboard' | 'ended';
+export type RoomStatus = 'lobby' | 'buffering' | 'countdown' | 'question' | 'slow_reveal' | 'scoreboard' | 'ended';
 
 export interface RoomState {
   code: string;

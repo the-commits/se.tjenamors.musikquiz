@@ -182,6 +182,12 @@ export default function App() {
     }
   };
 
+  const handleHostMediaReady = () => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'host_media_ready' }));
+    }
+  };
+
   // Host Action: Reveal question answer immediately
   const handleHostRevealAnswer = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -424,11 +430,12 @@ export default function App() {
                 </div>
               )}
 
-              {roomState.status === 'question' && (
+              {(roomState.status === 'question' || roomState.status === 'buffering') && (
                 <HostQuestion
                   roomState={roomState}
                   onRevealAnswer={handleHostRevealAnswer}
                   onReportUnplayable={handleHostReportUnplayable}
+                  onMediaReady={handleHostMediaReady}
                 />
               )}
 

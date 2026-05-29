@@ -317,9 +317,8 @@ En array av objekt med följande tvingade fält:
               finalQuestions = message.customQuestions;
             }
 
-            // We only need to enrich default/preset questions since AI ones are already enriched
+            // Preset questions are pre-enriched in playlists.json. Custom ones are enriched during generation.
             if (!message.customQuestions) {
-              finalQuestions = await Promise.all(finalQuestions.map((q) => enrichWithItunes({ ...q })));
               // Filter out known unplayable songs
               const unplayableRows = await db.all('SELECT youtube_link FROM songs WHERE playable = 0');
               const unplayableSet = new Set(unplayableRows.map(r => r.youtube_link));
@@ -437,27 +436,43 @@ En array av objekt med följande tvingade fält:
             const room = rooms.get(currentRoomCode || "");
             if (!room || !isHostConnection) return;
 
-            room.status = 'countdown';
-            room.countdown = 5;
+            room.status = 'buffering';
             room.currentQuestionIndex = 0;
             room.answersCount = 0;
             
             // Clean up old timers
-            if (room.timerIntervalId) clearInterval(room.timerIntervalId);
+            if (room.timerIntervalId) {
+              clearInterval(room.timerIntervalId);
+              room.timerIntervalId = null;
+            }
 
             sendRoomState(room);
+            break;
+          }
 
-            room.timerIntervalId = setInterval(() => {
-              room.countdown--;
-              if (room.countdown <= 0) {
-                // Time's up for countdown, start first question
-                clearInterval(room.timerIntervalId!);
-                room.timerIntervalId = null;
-                startQuestion(room);
-              } else {
+          case "host_media_ready": {
+            const room = rooms.get(currentRoomCode || "");
+            if (!room || !isHostConnection || room.status !== 'buffering') return;
+            
+            // Only show 5-second countdown for the very first question
+            if (room.currentQuestionIndex === 0) {
+                room.status = 'countdown';
+                room.countdown = 5;
+                if (room.timerIntervalId) clearInterval(room.timerIntervalId);
                 sendRoomState(room);
-              }
-            }, 1000);
+                room.timerIntervalId = setInterval(() => {
+                  room.countdown--;
+                  if (room.countdown <= 0) {
+                    clearInterval(room.timerIntervalId!);
+                    room.timerIntervalId = null;
+                    startQuestion(room);
+                  } else {
+                    sendRoomState(room);
+                  }
+                }, 1000);
+            } else {
+                startQuestion(room);
+            }
             break;
           }
 
@@ -526,8 +541,7 @@ En array av objekt med följande tvingade fält:
                 room.status = 'ended';
                 sendRoomState(room);
               } else {
-                room.status = 'countdown';
-                room.countdown = 5;
+                room.status = 'buffering';
                 room.answersCount = 0;
                 
                 // Clear state for all players
@@ -537,19 +551,12 @@ En array av objekt med följande tvingade fält:
                   p.lastAnswerPoints = 0;
                 });
 
-                sendRoomState(room);
+                if (room.timerIntervalId) {
+                  clearInterval(room.timerIntervalId);
+                  room.timerIntervalId = null;
+                }
 
-                if (room.timerIntervalId) clearInterval(room.timerIntervalId);
-                room.timerIntervalId = setInterval(() => {
-                  room.countdown--;
-                  if (room.countdown <= 0) {
-                    clearInterval(room.timerIntervalId!);
-                    room.timerIntervalId = null;
-                    startQuestion(room);
-                  } else {
-                    sendRoomState(room);
-                  }
-                }, 1000);
+                sendRoomState(room);
               }
             }
             break;

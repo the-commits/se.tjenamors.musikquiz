@@ -8,9 +8,10 @@ interface HostQuestionProps {
   roomState: RoomState;
   onRevealAnswer: () => void;
   onReportUnplayable?: (youtubeLink: string) => void;
+  onMediaReady?: () => void;
 }
 
-export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplayable }: HostQuestionProps) {
+export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplayable, onMediaReady }: HostQuestionProps) {
   const currentQuestion = roomState.questions[roomState.currentQuestionIndex];
   const timerRatio = roomState.questionTimer / roomState.questionDuration;
 
@@ -20,6 +21,31 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
     // Reset error when question changes
     setHasVideoError(false);
   }, [currentQuestion]);
+
+  const playerRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (roomState.status === 'question' && playerRef.current) {
+      if (playerRef.current.playVideo) {
+        playerRef.current.playVideo();
+      } else if (playerRef.current.play) {
+        playerRef.current.play();
+      }
+    }
+  }, [roomState.status]);
+
+  const handlePlay = (event: any) => {
+    // Save reference for later resuming
+    if (event && event.target) {
+      playerRef.current = event.target;
+    }
+    if (roomState.status === 'buffering') {
+      if (event.target.pauseVideo) event.target.pauseVideo();
+      else if (event.target.pause) event.target.pause();
+      
+      if (onMediaReady) onMediaReady();
+    }
+  };
 
   const handleVideoError = (event: YouTubeEvent) => {
     console.error("YouTube Player Error:", event.data);
@@ -44,6 +70,7 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
           src={currentQuestion.preview_url}
           autoPlay
           onError={() => setHasVideoError(true)}
+          onPlay={handlePlay}
           className="hidden"
         />
       ) : currentQuestion && (
@@ -61,6 +88,7 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
                 origin: typeof window !== 'undefined' ? window.location.origin : ''
               }
             }}
+            onPlay={handlePlay}
             onError={handleVideoError}
           />
         </div>

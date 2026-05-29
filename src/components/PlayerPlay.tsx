@@ -71,6 +71,29 @@ export default function PlayerPlay({ roomState, playerId, onAnswer, lastFeedback
         </div>
       );
 
+    // 1.5. BUFFERING MEDIA
+    case 'buffering':
+      return (
+        <div className="max-w-md mx-auto w-full flex flex-col justify-center min-h-[70vh] px-4 text-center">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[40px] p-10 shadow-2xl relative"
+          >
+            <div className="absolute inset-0 bg-cyan-500/10 blur-[50px] rounded-[40px] pointer-events-none" />
+            <div className="w-20 h-20 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <Music className="w-10 h-10 animate-bounce" />
+            </div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-widest mb-2 italic shadow-sm">
+              Laddar låten...
+            </h2>
+            <p className="text-indigo-200 font-medium text-base mb-8">
+              Gör dig redo att svara!
+            </p>
+          </motion.div>
+        </div>
+      );
+
     // 2. COUNTDOWN FOR NEXT START
     case 'countdown':
       return (
