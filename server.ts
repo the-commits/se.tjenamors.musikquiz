@@ -122,10 +122,10 @@ async function enrichWithItunes(q: Question): Promise<Question> {
       const track = data.results[0];
       if (track.previewUrl) {
         q.preview_url = track.previewUrl;
-        if (track.artworkUrl100) {
-          // Get a slightly larger cover if possible
-          q.cover_url = track.artworkUrl100.replace('100x100bb', '600x600bb');
-        }
+      }
+      if (track.artworkUrl100) {
+        // Get a slightly larger cover if possible
+        q.cover_url = track.artworkUrl100.replace('100x100bb', '600x600bb');
       }
     }
   } catch (error) {
