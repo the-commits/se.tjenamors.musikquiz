@@ -2,36 +2,27 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package.json and package-lock.json first for better caching
 COPY package*.json ./
+RUN npm ci
 
-# Install all dependencies (including devDependencies required for build)
-RUN npm install
-
-# Copy the rest of the application
 COPY . .
-
-# Build the client (Vite) and the server (esbuild)
 RUN npm run build
 
-# Second stage: minimal image for production
 FROM node:22-alpine
+
+ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Copy package.json to install production dependencies only
-COPY --from=builder /app/package*.json ./
-RUN npm install --omit=dev
+COPY --chown=node:node package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy the built assets
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/playlists.json ./
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/playlists.json ./
 
-# Set environment to production
-ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
 
-# Expose the server port
-EXPOSE 3000
+USER node
 
-# Start the application
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/server.cjs"]
