@@ -19,6 +19,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/playlists.json ./
+COPY --from=builder /app/cached_playlists.json* ./
 
 COPY package.json songs.db* ./
 
