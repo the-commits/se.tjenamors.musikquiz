@@ -17,10 +17,11 @@ COPY --from=builder /app/playlists.json ./
 COPY --from=builder /app/package.json /app/cached_playlists.json* ./
 
 COPY package.json songs.db* ./
-COPY media/ ./media/
 
 ENV PORT=8080
 EXPOSE 8080
+
 RUN mkdir -p /app/media && chown -R node:node /app
+
 USER node
 CMD ["node", "dist/server.cjs"]
