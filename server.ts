@@ -390,23 +390,25 @@ function sendRoomState(room: Room) {
     status: room.status,
     players: room.players,
     presets: presentedPresets,
-    questions: room.questions.map((q) => ({
-      id: q.id,
-      artist: q.artist,
-      title: q.title,
-      youtube_link: q.youtube_link,
-      preview_url: q.preview_url,
-      cover_url: q.cover_url,
-      start_time: q.start_time,
-      options: q.options,
-      // Hide correct index if we are currently mid-question to prevent cheating
-      correct_index:
-        room.status === "slow_reveal" ||
-        room.status === "scoreboard" ||
-        room.status === "ended"
-          ? q.correct_index
-          : -1,
-    })),
+    questions: room.status === "lobby"
+      ? room.questions.map((q) => ({ id: q.id } as any))
+      : room.questions.map((q) => ({
+          id: q.id,
+          artist: q.artist,
+          title: q.title,
+          youtube_link: q.youtube_link,
+          preview_url: q.preview_url,
+          cover_url: q.cover_url,
+          start_time: q.start_time,
+          options: q.options,
+          // Hide correct index if we are currently mid-question to prevent cheating
+          correct_index:
+            room.status === "slow_reveal" ||
+            room.status === "scoreboard" ||
+            room.status === "ended"
+              ? q.correct_index
+              : -1,
+        })),
     currentQuestionIndex: room.currentQuestionIndex,
     questionTimer: room.questionTimer,
     questionDuration: room.questionDuration,
@@ -686,15 +688,12 @@ En array av objekt med följande tvingade fält:
               return newQ;
             });
 
-            const questions = finalQuestions.slice(0, SONGS_PER_GAME);
-            const backupQuestions = finalQuestions.slice(SONGS_PER_GAME);
-
             const newRoom: Room = {
               code,
               status: "lobby",
               players: [],
-              questions: questions,
-              backupQuestions: backupQuestions,
+              questions: finalQuestions,
+              backupQuestions: [],
               currentQuestionIndex: 0,
               questionTimer: 25,
               questionDuration: message.duration || 25,
@@ -804,6 +803,19 @@ En array av objekt med följande tvingade fält:
           case "host_start_game": {
             const room = rooms.get(currentRoomCode || "");
             if (!room || !isHostConnection) return;
+
+            let requestedCount = parseInt(message.songCount) || SONGS_PER_GAME;
+            if (requestedCount < 1) requestedCount = SONGS_PER_GAME;
+
+            const listSize = room.questions.length;
+            const finalCount = Math.min(requestedCount, listSize, MAX_SONGS_PER_LIST);
+
+            // Slice the stored questions
+            const questionsToPlay = room.questions.slice(0, finalCount);
+            const backupQuestions = room.questions.slice(finalCount);
+
+            room.questions = questionsToPlay;
+            room.backupQuestions = backupQuestions;
 
             room.status = "buffering";
             room.currentQuestionIndex = 0;

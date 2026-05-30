@@ -177,9 +177,9 @@ export default function App() {
   };
 
   // Host Action: Trigger start sequence
-  const handleHostStartGame = () => {
+  const handleHostStartGame = (songCount: number) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_start_game' }));
+      socketRef.current.send(JSON.stringify({ type: 'host_start_game', songCount }));
     }
   };
 

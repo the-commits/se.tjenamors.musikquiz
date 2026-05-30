@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Play, Sparkles, Users, Music, Layers, Trash2, ShieldAlert } from 'lucide-react';
 import { RoomState, Question } from '../types';
 
 interface HostLobbyProps {
   roomState: RoomState;
-  onStartGame: () => void;
+  onStartGame: (songCount: number) => void;
   onSelectPreset: (presetName: string) => void;
   onGenerateAIQuiz: (theme: string) => Promise<void>;
   aiGenerationError: string | null;
@@ -22,6 +22,16 @@ export default function HostLobby({
 }: HostLobbyProps) {
   const [aiTheme, setAiTheme] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [songCount, setSongCount] = useState(10);
+
+  const listSize = roomState.questions?.length || 0;
+  const maxUiSongs = listSize > 0 ? Math.min(25, listSize) : 25;
+
+  useEffect(() => {
+    if (songCount > maxUiSongs && maxUiSongs > 0) {
+      setSongCount(maxUiSongs);
+    }
+  }, [maxUiSongs]);
 
   const joinUrl = typeof window !== 'undefined' ? `${window.location.href.split('?')[0]}?join=${roomState.code}` : '';
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}`;
@@ -56,10 +66,36 @@ export default function HostLobby({
             <span className="text-[10px] uppercase tracking-widest font-bold text-pink-500">Spelkod / PIN</span>
             <span className="font-black text-5xl text-indigo-950 block tracking-widest tabular-nums mt-1">{roomState.code}</span>
           </div>
+
+          <div className="w-full bg-indigo-50 border border-indigo-100 p-4 rounded-3xl mt-4 flex items-center justify-between">
+            <div className="text-left">
+              <span className="text-[10px] uppercase tracking-widest font-bold text-indigo-500 block">Antal låtar</span>
+              <span className="text-[11px] text-indigo-400 font-medium block mt-0.5">Max {maxUiSongs} (av {listSize})</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSongCount(prev => Math.max(1, prev - 1))}
+                className="w-10 h-10 rounded-full bg-white border border-indigo-200 text-indigo-950 flex items-center justify-center font-bold hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer"
+              >
+                -
+              </button>
+              <span className="w-8 text-center font-black text-2xl text-indigo-950 select-none">
+                {songCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSongCount(prev => Math.min(maxUiSongs, prev + 1))}
+                className="w-10 h-10 rounded-full bg-white border border-indigo-200 text-indigo-950 flex items-center justify-center font-bold hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer"
+              >
+                +
+              </button>
+            </div>
+          </div>
         </div>
 
         <button
-          onClick={onStartGame}
+          onClick={() => onStartGame(songCount)}
           id="btn-host-start"
           disabled={roomState.players.length === 0}
           className={`w-full mt-8 py-5 px-8 rounded-full font-black text-xl flex items-center justify-center gap-2 transition-all ${
