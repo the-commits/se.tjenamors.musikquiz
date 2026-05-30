@@ -1,85 +1,99 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Play, Users, Music, AlertTriangle, Sparkles, RefreshCw, HelpCircle, ArrowRight } from 'lucide-react';
-import { RoomState, SocketMessage, Question } from './types';
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Play,
+  Users,
+  Music,
+  AlertTriangle,
+  Sparkles,
+  RefreshCw,
+  HelpCircle,
+  ArrowRight,
+} from "lucide-react";
+import { RoomState, SocketMessage, Question } from "./types";
 
 // Component imports
-import HostLobby from './components/HostLobby';
-import HostQuestion from './components/HostQuestion';
-import HostReveal from './components/HostReveal';
-import HostScoreboard from './components/HostScoreboard';
-import PlayerJoin from './components/PlayerJoin';
-import PlayerPlay from './components/PlayerPlay';
-import MediaPreloader from './components/MediaPreloader';
+import HostLobby from "./components/HostLobby";
+import HostQuestion from "./components/HostQuestion";
+import HostReveal from "./components/HostReveal";
+import HostScoreboard from "./components/HostScoreboard";
+import PlayerJoin from "./components/PlayerJoin";
+import PlayerPlay from "./components/PlayerPlay";
+import MediaPreloader from "./components/MediaPreloader";
 
 export default function App() {
   // Navigation / Role selection states
   // 'landing' | 'host' | 'player'
-  const [role, setRole] = useState<'landing' | 'host' | 'player'>('landing');
+  const [role, setRole] = useState<"landing" | "host" | "player">("landing");
 
   // Connection & Room state
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [roomCodeInput, setRoomCodeInput] = useState('');
-  const [playerId, setPlayerId] = useState<string>('');
+  const [roomCodeInput, setRoomCodeInput] = useState("");
+  const [playerId, setPlayerId] = useState<string>("");
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [aiGenerationError, setAiGenerationError] = useState<string | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<string>('default');
+  const [aiGenerationError, setAiGenerationError] = useState<string | null>(
+    null,
+  );
+  const [selectedPreset, setSelectedPreset] = useState<string>("default");
 
   // Feedback for the immediate guess click
-  const [lastFeedback, setLastFeedback] = useState<{ isCorrect: boolean; points: number; correctIndex: number } | null>(null);
+  const [lastFeedback, setLastFeedback] = useState<{
+    isCorrect: boolean;
+    points: number;
+    correctIndex: number;
+  } | null>(null);
 
   // Connection refs
   const socketRef = useRef<WebSocket | null>(null);
 
   // Generate or regain a Player ID
   useEffect(() => {
-    let pId = sessionStorage.getItem('musikquiz_player_id');
+    let pId = sessionStorage.getItem("musikquiz_player_id");
     if (!pId) {
       pId = `p_${Math.random().toString(36).substr(2, 9)}`;
-      sessionStorage.setItem('musikquiz_player_id', pId);
+      sessionStorage.setItem("musikquiz_player_id", pId);
     }
     setPlayerId(pId);
 
     // Deep-linking QR scan handler: Check for ?join=ABCD query
     const params = new URLSearchParams(window.location.search);
-    const joinCode = params.get('join');
+    const joinCode = params.get("join");
     if (joinCode) {
       setRoomCodeInput(joinCode.toUpperCase());
-      setRole('player');
+      setRole("player");
     }
   }, []);
   // Screen Wake Lock to prevent phone sleeping during quiz
   useEffect(() => {
     let wakeLock: any = null;
-    
+
     const requestWakeLock = async () => {
       try {
-        if ('wakeLock' in navigator && role !== 'landing') {
-          wakeLock = await (navigator as any).wakeLock.request('screen');
+        if ("wakeLock" in navigator && role !== "landing") {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
         }
       } catch (err) {
-        console.error('Wake Lock error:', err);
+        console.error("Wake Lock error:", err);
       }
     };
-    
+
     requestWakeLock();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && role !== 'landing') {
+      if (document.visibilityState === "visible" && role !== "landing") {
         requestWakeLock();
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (wakeLock) {
         wakeLock.release().catch(() => {});
       }
     };
   }, [role]);
-
 
   // Sync state correctly if role turns to landing
   const resetLocalConnection = () => {
@@ -88,7 +102,7 @@ export default function App() {
       socketRef.current = null;
     }
     setRoomState(null);
-    setRole('landing');
+    setRole("landing");
     setLastFeedback(null);
     setErrorText(null);
   };
@@ -98,7 +112,7 @@ export default function App() {
       socketRef.current.close();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}`;
     const ws = new WebSocket(wsUrl);
 
@@ -109,45 +123,45 @@ export default function App() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        
+
         switch (message.type) {
-          case 'room_state':
+          case "room_state":
             setRoomState(message.state);
             // Clear feedback for next rounds
-            if (message.state.status === 'countdown') {
+            if (message.state.status === "countdown") {
               setLastFeedback(null);
             }
             break;
-          
-          case 'host_created':
+
+          case "host_created":
             // Host successfully set up
             break;
 
-          case 'join_success':
-            sessionStorage.setItem('musikquiz_player_id', message.playerId);
+          case "join_success":
+            sessionStorage.setItem("musikquiz_player_id", message.playerId);
             setPlayerId(message.playerId);
             setErrorText(null);
             break;
 
-          case 'error':
+          case "error":
             setErrorText(message.message);
             // If we failed to join, push back to login
-            if (role === 'player' && !roomState) {
+            if (role === "player" && !roomState) {
               // disconnect
               ws.close();
             }
             break;
 
-          case 'answer_result':
-          case 'player_feedback':
+          case "answer_result":
+          case "player_feedback":
             setLastFeedback({
               isCorrect: message.isCorrect,
               points: message.points,
-              correctIndex: message.correctIndex
+              correctIndex: message.correctIndex,
             });
             break;
 
-          case 'room_closed':
+          case "room_closed":
             resetLocalConnection();
             break;
         }
@@ -164,49 +178,63 @@ export default function App() {
   };
 
   // Host Action: Create room
-  const handleHostCreate = (preset = 'default', customQuestions?: Question[]) => {
-    setSelectedPreset(preset === 'default' && customQuestions ? 'custom' : preset);
+  const handleHostCreate = (
+    preset = "default",
+    customQuestions?: Question[],
+  ) => {
+    setSelectedPreset(
+      preset === "default" && customQuestions ? "custom" : preset,
+    );
     initWebSocket((ws) => {
-      ws.send(JSON.stringify({
-        type: 'host_create',
-        preset,
-        customQuestions,
-        duration: 25 // 25 seconds timers
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "host_create",
+          preset,
+          customQuestions,
+          duration: 25, // 25 seconds timers
+        }),
+      );
     });
   };
 
   // Host Action: Trigger start sequence
   const handleHostStartGame = (songCount: number) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_start_game', songCount }));
+      socketRef.current.send(
+        JSON.stringify({ type: "host_start_game", songCount }),
+      );
     }
   };
 
   const handleHostMediaReady = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_media_ready' }));
+      socketRef.current.send(JSON.stringify({ type: "host_media_ready" }));
     }
   };
 
   // Host Action: Reveal question answer immediately
   const handleHostRevealAnswer = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_reveal_answer' }));
+      socketRef.current.send(JSON.stringify({ type: "host_reveal_answer" }));
     }
   };
 
   // Host Action: Slide to next question
   const handleHostNextQuestion = () => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_next_question' }));
+      socketRef.current.send(JSON.stringify({ type: "host_next_question" }));
     }
   };
 
   // Host Action: Report unplayable song to DB and switch immediately
   const handleHostReportUnplayable = (youtubeLink: string) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'host_report_unplayable', youtube_link: youtubeLink }));
+      socketRef.current.send(
+        JSON.stringify({
+          type: "host_report_unplayable",
+          youtube_link: youtubeLink,
+        }),
+      );
     }
   };
 
@@ -219,10 +247,10 @@ export default function App() {
   const handleGenerateAIQuiz = async (theme: string) => {
     setAiGenerationError(null);
     try {
-      const response = await fetch('/api/quiz/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme, amount: 6 })
+      const response = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme, amount: 6 }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -237,7 +265,9 @@ export default function App() {
         throw new Error("Genererade frågor var felformaterade.");
       }
     } catch (err: any) {
-      setAiGenerationError(err.message || "Ett oväntat fel inträffade vid AI-generering.");
+      setAiGenerationError(
+        err.message || "Ett oväntat fel inträffade vid AI-generering.",
+      );
     }
   };
 
@@ -245,22 +275,26 @@ export default function App() {
   const handlePlayerJoin = (roomCode: string, name: string) => {
     setErrorText(null);
     initWebSocket((ws) => {
-      ws.send(JSON.stringify({
-        type: 'player_join',
-        roomCode,
-        name,
-        playerId
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "player_join",
+          roomCode,
+          name,
+          playerId,
+        }),
+      );
     });
   };
 
   // Player Action: Tap colored choice buttons
   const handlePlayerSubmitAnswer = (optionIndex: number) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({
-        type: 'player_submit_answer',
-        answerIndex: optionIndex
-      }));
+      socketRef.current.send(
+        JSON.stringify({
+          type: "player_submit_answer",
+          answerIndex: optionIndex,
+        }),
+      );
     }
   };
 
@@ -278,13 +312,14 @@ export default function App() {
       {/* Absolute glow design grids */}
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-fuchsia-600 rounded-full mix-blend-screen filter blur-[120px] opacity-30 pointer-events-none" />
       <div className="absolute top-1/2 -right-24 w-80 h-80 bg-cyan-500 rounded-full mix-blend-screen filter blur-[100px] opacity-20 pointer-events-none" />
-      
+
       {/* Global Navbar */}
       <header className="header-navbar h-20 lg:h-24 px-6 lg:px-12 flex justify-between items-center z-30 sticky top-0 border-b border-white/10 bg-white/5 backdrop-blur-md select-none">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={resetLocalConnection}>
-          <div 
-            className="logo-container w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-lg overflow-hidden transform -rotate-6"
-          >
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={resetLocalConnection}
+        >
+          <div className="logo-container w-10 h-10 lg:w-12 lg:h-12 rounded-xl flex items-center justify-center shadow-lg overflow-hidden transform -rotate-6">
             <Music className="w-5 h-5 lg:w-6 lg:h-6 text-white drop-shadow-md" />
           </div>
           <span className="font-display text-2xl lg:text-3xl font-black tracking-tighter italic shadow-sm">
@@ -295,7 +330,9 @@ export default function App() {
         {roomState && (
           <div className="flex items-center gap-6">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[10px] lg:text-xs uppercase tracking-widest font-bold opacity-70">Spelkod</span>
+              <span className="text-[10px] lg:text-xs uppercase tracking-widest font-bold opacity-70">
+                Spelkod
+              </span>
               <span className="text-2xl lg:text-4xl font-black text-yellow-400 tabular-nums leading-none">
                 {roomState.code}
               </span>
@@ -313,9 +350,8 @@ export default function App() {
       {/* Main Play Arena container */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 relative z-10 flex flex-col justify-center">
         <AnimatePresence mode="wait">
-          
           {/* LANDING PAGE ROUTE */}
-          {role === 'landing' && !roomState && (
+          {role === "landing" && !roomState && (
             <motion.div
               key="landing-view"
               initial={{ opacity: 0, scale: 0.98 }}
@@ -334,10 +370,12 @@ export default function App() {
                   Tjenamors <span className="text-yellow-400">Musikquiz!</span>
                 </h1>
                 <p className="text-indigo-200 font-medium text-lg leading-relaxed mb-6">
-                  Spela musik direkt från storskärmen. Kompisarna ansluter snabbt med mobilen genom att bara skanna en QR-kod, gissar låtar och tävlar om herraväldet.
+                  Spela musik direkt från storskärmen. Kompisarna ansluter
+                  snabbt med mobilen genom att bara skanna en QR-kod, gissar
+                  låtar och tävlar om herraväldet.
                 </p>
                 <div className="text-indigo-400 opacity-80 text-xs font-bold border-t border-white/10 pt-4 mt-6 uppercase tracking-widest">
-                  YouTube-strömmar • Realtidssynk • AI-generator
+                  Partyspel • Realtidssynk • AI-generator
                 </div>
               </div>
 
@@ -346,8 +384,8 @@ export default function App() {
                 {/* HOST CARD */}
                 <button
                   onClick={() => {
-                    setRole('host');
-                    handleHostCreate('default');
+                    setRole("host");
+                    handleHostCreate("default");
                   }}
                   id="btn-role-host"
                   className="bg-white/5 backdrop-blur-md border border-white/10 text-left p-8 rounded-[40px] hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all duration-300 outline-none focus:ring-2 focus:ring-yellow-400 group cursor-pointer shadow-xl"
@@ -362,14 +400,15 @@ export default function App() {
                     Starta som Värd (Host)
                   </h3>
                   <p className="text-indigo-200 font-medium">
-                    Visa på TV:n eller en storskärm. Välj en spellista eller skapa ett personligt AI-quiz.
+                    Visa på TV:n eller en storskärm. Välj en spellista eller
+                    skapa ett personligt AI-quiz.
                   </p>
                 </button>
 
                 {/* PLAYER CARD */}
                 <button
                   onClick={() => {
-                    setRole('player');
+                    setRole("player");
                   }}
                   id="btn-role-player"
                   className="bg-white/5 backdrop-blur-md border border-white/10 text-left p-8 rounded-[40px] hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all duration-300 outline-none focus:ring-2 focus:ring-pink-400 group cursor-pointer shadow-xl"
@@ -384,7 +423,8 @@ export default function App() {
                     Gå med som Spelare
                   </h3>
                   <p className="text-indigo-200 font-medium">
-                    Motsvarar din handkontroll. Spelare ansluter här för att gissa och tävla.
+                    Motsvarar din handkontroll. Spelare ansluter här för att
+                    gissa och tävla.
                   </p>
                 </button>
               </div>
@@ -392,7 +432,7 @@ export default function App() {
           )}
 
           {/* HOST SCREEN SCHEMES */}
-          {role === 'host' && roomState && (
+          {role === "host" && roomState && (
             <motion.div
               key="host-views-parent"
               initial={{ opacity: 0 }}
@@ -400,8 +440,11 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="h-full"
             >
-              <MediaPreloader roomState={roomState} onReportUnplayable={handleHostReportUnplayable} />
-              {roomState.status === 'lobby' && (
+              <MediaPreloader
+                roomState={roomState}
+                onReportUnplayable={handleHostReportUnplayable}
+              />
+              {roomState.status === "lobby" && (
                 <HostLobby
                   roomState={roomState}
                   onStartGame={handleHostStartGame}
@@ -412,9 +455,9 @@ export default function App() {
                 />
               )}
 
-              {roomState.status === 'countdown' && (
+              {roomState.status === "countdown" && (
                 <div className="flex flex-col items-center justify-center p-8 text-center min-h-[50vh] select-none">
-                  <motion.div 
+                  <motion.div
                     initial={{ scale: 0.8 }}
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ repeat: Infinity, duration: 1 }}
@@ -426,7 +469,7 @@ export default function App() {
                     key={roomState.countdown}
                     initial={{ scale: 0.2, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', damping: 10 }}
+                    transition={{ type: "spring", damping: 10 }}
                     className="text-8xl md:text-9xl font-display font-black text-indigo-400"
                   >
                     {roomState.countdown}
@@ -434,7 +477,8 @@ export default function App() {
                 </div>
               )}
 
-              {(roomState.status === 'question' || roomState.status === 'buffering') && (
+              {(roomState.status === "question" ||
+                roomState.status === "buffering") && (
                 <HostQuestion
                   roomState={roomState}
                   onRevealAnswer={handleHostRevealAnswer}
@@ -443,7 +487,7 @@ export default function App() {
                 />
               )}
 
-              {roomState.status === 'slow_reveal' && (
+              {roomState.status === "slow_reveal" && (
                 <HostReveal
                   roomState={roomState}
                   onNextQuestion={handleHostNextQuestion}
@@ -451,7 +495,7 @@ export default function App() {
                 />
               )}
 
-              {roomState.status === 'scoreboard' && (
+              {roomState.status === "scoreboard" && (
                 <HostScoreboard
                   roomState={roomState}
                   onNextQuestion={handleHostNextQuestion}
@@ -459,7 +503,7 @@ export default function App() {
                 />
               )}
 
-              {roomState.status === 'ended' && (
+              {roomState.status === "ended" && (
                 <HostScoreboard
                   roomState={roomState}
                   onNextQuestion={handleHostNextQuestion}
@@ -470,7 +514,7 @@ export default function App() {
           )}
 
           {/* PLAYER SCREEN SCHEMES */}
-          {role === 'player' && (
+          {role === "player" && (
             <motion.div
               key="player-views-parent"
               initial={{ opacity: 0 }}
@@ -494,13 +538,13 @@ export default function App() {
               )}
             </motion.div>
           )}
-
         </AnimatePresence>
       </main>
 
       {/* Global minimal footer */}
       <footer className="border-t border-white/10 bg-white/5 py-6 px-6 text-center text-xs uppercase tracking-widest font-bold text-indigo-400/80 select-none z-10">
-        Tjenamors Musikquiz! &copy; {new Date().getFullYear()} &mdash; Skapad för fantastisk stämning på festen!
+        Tjenamors Musikquiz! &copy; {new Date().getFullYear()} &mdash; Skapad
+        för fantastisk stämning på festen!
       </footer>
     </div>
   );
