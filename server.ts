@@ -76,6 +76,8 @@ interface Room {
   timerIntervalId: NodeJS.Timeout | null;
 }
 
+const SONGS_PER_GAME = 10;
+
 const playlistsPath = path.join(process.cwd(), "playlists.json");
 let playlistsData: any = { default: [], swedish: [], millennium: [] };
 try {
@@ -320,12 +322,12 @@ function sendRoomState(room: Room) {
   };
 
   const defaultPresets: any[] = [
-    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", songCount: DEFAULT_QUESTIONS.length, playCount: getDynamicDefaultPlayCount("default"), isDefault: true },
-    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", songCount: PRESET_QUZZES.swedish.length, playCount: getDynamicDefaultPlayCount("swedish"), isDefault: true },
-    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: PRESET_QUZZES.millennium.length, playCount: getDynamicDefaultPlayCount("millennium"), isDefault: true },
-    { id: "british", name: "🇬🇧 Brittiska vågen", description: "Det bästa från brittisk rock & pop.", songCount: getDynamicDefaultCount("british", 15), playCount: getDynamicDefaultPlayCount("british"), isDefault: true },
-    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", songCount: getDynamicDefaultCount("hiphop90", 15), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
-    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", songCount: getDynamicDefaultCount("epadunk", 15), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
+    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", actualSongCount: DEFAULT_QUESTIONS.length, playCount: getDynamicDefaultPlayCount("default"), isDefault: true },
+    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", actualSongCount: PRESET_QUZZES.swedish.length, playCount: getDynamicDefaultPlayCount("swedish"), isDefault: true },
+    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", actualSongCount: PRESET_QUZZES.millennium.length, playCount: getDynamicDefaultPlayCount("millennium"), isDefault: true },
+    { id: "british", name: "🇬🇧 Brittiska vågen", description: "Det bästa från brittisk rock & pop.", actualSongCount: getDynamicDefaultCount("british", 15), playCount: getDynamicDefaultPlayCount("british"), isDefault: true },
+    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", actualSongCount: getDynamicDefaultCount("hiphop90", 15), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
+    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", actualSongCount: getDynamicDefaultCount("epadunk", 15), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
   ];
 
   // Extract custom presets (excluding the dynamic default ones)
@@ -345,7 +347,7 @@ function sendRoomState(room: Room) {
       id: `custom_${key}`,
       name: `✨ ${displayName}`,
       description: `AI-skapad spellista.`,
-      songCount: questions.length,
+      actualSongCount: questions.length,
       playCount: playCount,
       isDefault: false
     });
@@ -359,8 +361,8 @@ function sendRoomState(room: Room) {
   // 2. Play count
   // 3. Defaults have priority if counts are equal (keep isDefault sorted higher)
   allPresets.sort((a, b) => {
-    if (b.songCount !== a.songCount) {
-      return b.songCount - a.songCount;
+    if (b.actualSongCount !== a.actualSongCount) {
+      return b.actualSongCount - a.actualSongCount;
     }
     if (b.playCount !== a.playCount) {
       return b.playCount - a.playCount;
@@ -370,8 +372,15 @@ function sendRoomState(room: Room) {
     return bDef - aDef;
   });
 
-  // Limit to top 6 presets presented in the lobby
-  const presentedPresets = allPresets.slice(0, 6);
+  // Limit to top 6 presets presented in the lobby and display SONGS_PER_GAME (10) as their song count
+  const presentedPresets = allPresets.slice(0, 6).map(preset => ({
+    id: preset.id,
+    name: preset.name,
+    description: preset.description,
+    songCount: SONGS_PER_GAME,
+    playCount: preset.playCount,
+    isDefault: preset.isDefault
+  }));
 
   // Map internal state to RoomState matching client types
   const statePayload = {
@@ -445,9 +454,9 @@ async function startServer() {
       const now = Date.now();
       const cooldownMs = 15 * 60 * 1000;
       if (now - lastGenerationTime < cooldownMs) {
-        // If cooldown is active, but we already have at least 10 songs cached for this theme,
+        // If cooldown is active, but we already have at least SONGS_PER_GAME songs cached for this theme,
         // we can bypass the cooldown error and serve the cached questions!
-        if (existingQuestions.length >= 10) {
+        if (existingQuestions.length >= SONGS_PER_GAME) {
           console.log(`[Cache Cooldown Bypass] Serving existing cached playlist for theme: ${theme} (count: ${existingQuestions.length}) due to active cooldown.`);
           return res.json({ questions: existingQuestions });
         }
@@ -561,9 +570,9 @@ En array av objekt med följande tvingade fält:
         }
       }
 
-      // Check min size: "alltid ha minst 10 låtar i listan"
-      if (mergedQuestions.length < 10) {
-        throw new Error(`Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst 10).`);
+      // Check min size: "alltid ha minst SONGS_PER_GAME låtar i listan"
+      if (mergedQuestions.length < SONGS_PER_GAME) {
+        throw new Error(`Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst ${SONGS_PER_GAME}).`);
       }
 
       // Cap at 50 options: "tills en lista har 50 alternativ"
@@ -675,8 +684,8 @@ En array av objekt med följande tvingade fält:
               return newQ;
             });
 
-            const questions = finalQuestions.slice(0, 10);
-            const backupQuestions = finalQuestions.slice(10);
+            const questions = finalQuestions.slice(0, SONGS_PER_GAME);
+            const backupQuestions = finalQuestions.slice(SONGS_PER_GAME);
 
             const newRoom: Room = {
               code,
