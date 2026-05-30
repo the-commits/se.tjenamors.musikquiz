@@ -75,6 +75,7 @@ export default function HostLobby({
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                id="btn-songcount-minus"
                 onClick={() => setSongCount(prev => Math.max(1, prev - 1))}
                 className="w-10 h-10 rounded-full bg-white border border-indigo-200 text-indigo-950 flex items-center justify-center font-bold hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer"
               >
@@ -85,6 +86,7 @@ export default function HostLobby({
               </span>
               <button
                 type="button"
+                id="btn-songcount-plus"
                 onClick={() => setSongCount(prev => Math.min(maxUiSongs, prev + 1))}
                 className="w-10 h-10 rounded-full bg-white border border-indigo-200 text-indigo-950 flex items-center justify-center font-bold hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer"
               >
@@ -169,16 +171,15 @@ export default function HostLobby({
               { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: 10, playCount: 0 }
             ]).map((preset, idx) => {
               const isSelected = selectedPreset === preset.id;
-              // Cycle through gradient colors for variety
-              const gradientClass = preset.id === 'default' || idx % 3 === 0
+              // The first ranked playlist gets the special pink/fuchsia theme, and the rest get the cyan/blue theme
+              const gradientClass = idx === 0
                 ? 'from-pink-500/20 to-fuchsia-500/20 border-pink-500/50 shadow-pink-500/20'
-                : preset.id === 'swedish' || idx % 3 === 1
-                ? 'from-cyan-500/20 to-blue-500/20 border-cyan-500/50 shadow-cyan-500/20'
-                : 'from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-yellow-500/20';
+                : 'from-cyan-500/20 to-blue-500/20 border-cyan-500/50 shadow-cyan-500/20';
 
               return (
                 <button
                   key={preset.id}
+                  id={`preset-${preset.id}`}
                   onClick={() => onSelectPreset(preset.id)}
                   className={`p-5 rounded-3xl border text-left transition-all relative group flex flex-col justify-between min-h-[140px] ${
                     isSelected

@@ -49,11 +49,11 @@ function PreloadItem({ question, onReportUnplayable }: PreloadItemProps) {
   };
 
   useEffect(() => {
-    // Start timeout for 5 seconds to load
+    // Start timeout for 15 seconds to load
     timeoutRef.current = setTimeout(() => {
       console.warn(`[Preloader] Loading timeout for: ${question.title}`);
       reportUnplayable();
-    }, 5000);
+    }, 15000);
 
     return () => {
       if (timeoutRef.current) {

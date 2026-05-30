@@ -26,7 +26,7 @@ COPY package.json songs.db* ./
 ENV PORT=8080
 EXPOSE 8080
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/media && chown -R node:node /app
 
 USER node
 

@@ -32,7 +32,7 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
         if (onReportUnplayable && currentQuestion?.youtube_link) {
           onReportUnplayable(currentQuestion.youtube_link);
         }
-      }, 5000); // 5 seconds timeout to verify playability
+      }, 15000); // 15 seconds timeout to verify playability
     }
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
