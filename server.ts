@@ -74,6 +74,7 @@ interface Room {
   hostSocket: WebSocket | null;
   playerSockets: Map<string, WebSocket>; // playerId -> WebSocket
   timerIntervalId: NodeJS.Timeout | null;
+  preset?: string;
 }
 
 const SONGS_PER_GAME = 10;
@@ -190,8 +191,9 @@ En array av objekt med följande tvingade fält:
     const enrichedQuestions = await Promise.all(
       newQuestions.map(async (q: any, idx: number) => {
         const enriched = await enrichWithItunes(q);
+        const cached = await downloadAndCacheMedia(enriched);
         return {
-          ...enriched,
+          ...cached,
           id: `ai_${idx}_${Date.now()}`
         };
       })
@@ -263,6 +265,54 @@ async function enrichWithItunes(q: Question): Promise<Question> {
     console.error("Failed to fetch iTunes data for", q.artist, q.title);
   }
   return q;
+}
+
+const mediaDir = path.join(process.cwd(), "media");
+if (!fs.existsSync(mediaDir)) {
+  fs.mkdirSync(mediaDir, { recursive: true });
+}
+
+async function downloadAndCacheMedia(q: Question): Promise<Question> {
+  if (!q.preview_url) return q;
+  if (q.preview_url.startsWith("/media/")) return q;
+
+  try {
+    const sanitizedId = String(q.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+    let ext = ".m4a";
+    if (q.preview_url.includes(".mp3")) ext = ".mp3";
+    const filename = `${sanitizedId}${ext}`;
+    const destPath = path.join(mediaDir, filename);
+
+    if (fs.existsSync(destPath)) {
+      q.preview_url = `/media/${filename}`;
+      return q;
+    }
+
+    console.log(`[Media Cache] Downloading preview for: ${q.artist} - ${q.title}...`);
+    const res = await fetch(q.preview_url);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const buffer = await res.arrayBuffer();
+    fs.writeFileSync(destPath, Buffer.from(buffer));
+    
+    q.preview_url = `/media/${filename}`;
+    console.log(`[Media Cache] Successfully cached to ${q.preview_url}`);
+  } catch (err) {
+    console.error(`[Media Cache] Failed to download media for ${q.artist} - ${q.title}:`, err);
+  }
+  return q;
+}
+
+async function cacheAllBuiltInPlaylistsMedia() {
+  console.log("[Media Cache] Pre-caching built-in playlists media in background...");
+  for (const q of DEFAULT_QUESTIONS) {
+    await downloadAndCacheMedia(q);
+  }
+  for (const [name, list] of Object.entries(PRESET_QUZZES)) {
+    for (const q of list) {
+      await downloadAndCacheMedia(q);
+    }
+  }
+  console.log("[Media Cache] Finished pre-caching built-in playlists media.");
 }
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -425,6 +475,7 @@ function sendRoomState(room: Room) {
 async function startServer() {
   const app = express();
   app.use(express.json());
+  app.use("/media", express.static(path.join(process.cwd(), "media")));
 
   // API endpoint to generate quiz questions using AI
   app.post("/api/quiz/generate", async (req, res) => {
@@ -555,8 +606,9 @@ En array av objekt med följande tvingade fält:
       const enrichedQuestions = await Promise.all(
         newQuestions.map(async (q: any, idx: number) => {
           const enriched = await enrichWithItunes(q);
+          const cached = await downloadAndCacheMedia(enriched);
           return {
-            ...enriched,
+            ...cached,
             id: `ai_${idx}_${Date.now()}`
           };
         })
@@ -632,28 +684,12 @@ En array av objekt med följande tvingade fält:
               finalQuestions = PRESET_QUZZES[message.preset];
             } else if (message.preset && (message.preset === "british" || message.preset === "hiphop90" || message.preset === "epadunk")) {
               finalQuestions = await getOrCreatePresetQuestions(message.preset);
-              
-              // Increment play count and save back to cache file
-              const cache = loadCachedPlaylists();
-              const cachedEntry = cache[message.preset];
-              if (cachedEntry && !Array.isArray(cachedEntry)) {
-                cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
-                cache[message.preset] = cachedEntry;
-                saveCachedPlaylists(cache);
-              }
             } else if (message.preset && message.preset.startsWith("custom_")) {
               const cacheKey = message.preset.replace("custom_", "");
               const cache = loadCachedPlaylists();
               const cachedEntry = cache[cacheKey];
               if (cachedEntry) {
                 finalQuestions = Array.isArray(cachedEntry) ? cachedEntry : cachedEntry.questions;
-                
-                // Increment play count and save back to cache file
-                if (!Array.isArray(cachedEntry)) {
-                  cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
-                  cache[cacheKey] = cachedEntry;
-                  saveCachedPlaylists(cache);
-                }
               }
             } else if (
               message.customQuestions &&
@@ -702,6 +738,7 @@ En array av objekt med följande tvingade fält:
               hostSocket: ws,
               playerSockets: new Map(),
               timerIntervalId: null,
+              preset: message.preset,
             };
 
             rooms.set(code, newRoom);
@@ -929,6 +966,42 @@ En array av objekt med följande tvingade fält:
               room.currentQuestionIndex++;
               if (room.currentQuestionIndex >= room.questions.length) {
                 room.status = "ended";
+
+                // Increment play count of the preset when the game is finished!
+                if (room.preset) {
+                  const presetId = room.preset;
+                  if (presetId === "british" || presetId === "hiphop90" || presetId === "epadunk") {
+                    const cache = loadCachedPlaylists();
+                    const cachedEntry = cache[presetId];
+                    if (cachedEntry && !Array.isArray(cachedEntry)) {
+                      cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
+                      cache[presetId] = cachedEntry;
+                      saveCachedPlaylists(cache);
+                    }
+                  } else if (presetId.startsWith("custom_")) {
+                    const cacheKey = presetId.replace("custom_", "");
+                    const cache = loadCachedPlaylists();
+                    const cachedEntry = cache[cacheKey];
+                    if (cachedEntry) {
+                      if (!Array.isArray(cachedEntry)) {
+                        cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
+                        cache[cacheKey] = cachedEntry;
+                        saveCachedPlaylists(cache);
+                      }
+                    }
+                  } else {
+                    // Default presets ("default", "swedish", "millennium")
+                    const cache = loadCachedPlaylists();
+                    if (!cache[presetId]) {
+                      cache[presetId] = { playCount: 0 };
+                    }
+                    if (!Array.isArray(cache[presetId])) {
+                      cache[presetId].playCount = (cache[presetId].playCount || 0) + 1;
+                      saveCachedPlaylists(cache);
+                    }
+                  }
+                }
+
                 sendRoomState(room);
               } else {
                 room.status = "buffering";
@@ -1066,6 +1139,10 @@ En array av objekt med följande tvingade fält:
     console.log(
       `Musikquiz full-stack server listening on http://localhost:${PORT}`,
     );
+    // Pre-cache built-in playlists media in background
+    cacheAllBuiltInPlaylistsMedia().catch(err => {
+      console.error("Failed to pre-cache built-in playlists media:", err);
+    });
   });
 }
 

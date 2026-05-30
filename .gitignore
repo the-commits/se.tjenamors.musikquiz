@@ -12,3 +12,4 @@ coverage/
 test-results/
 playwright-report/
 cached_playlists.json
+media/
