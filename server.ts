@@ -77,6 +77,7 @@ interface Room {
 }
 
 const SONGS_PER_GAME = 10;
+const MAX_SONGS_PER_LIST = 50;
 
 const playlistsPath = path.join(process.cwd(), "playlists.json");
 let playlistsData: any = { default: [], swedish: [], millennium: [] };
@@ -142,7 +143,7 @@ async function getOrCreatePresetQuestions(presetId: string): Promise<Question[]>
     }
 
     console.log(`[AI Auto-Generation] Generating default preset "${theme}" on the fly...`);
-    const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt 15 frågor. 
+    const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt ${MAX_SONGS_PER_LIST} frågor. 
 Varje fråga måste representera en känd, mycket populär låt.
 För varje låt, ge en giltig YouTube-video (video ID, t.ex. 'unfzfe8f9NI' för ABBA Mamma Mia) och en starttid i sekunder där intro eller refräng börjar (t.ex. 30).
 Ge exakt 4 svarsalternativ där ett är rätt.
@@ -325,9 +326,9 @@ function sendRoomState(room: Room) {
     { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", actualSongCount: DEFAULT_QUESTIONS.length, playCount: getDynamicDefaultPlayCount("default"), isDefault: true },
     { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", actualSongCount: PRESET_QUZZES.swedish.length, playCount: getDynamicDefaultPlayCount("swedish"), isDefault: true },
     { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", actualSongCount: PRESET_QUZZES.millennium.length, playCount: getDynamicDefaultPlayCount("millennium"), isDefault: true },
-    { id: "british", name: "🇬🇧 Brittiska vågen", description: "Det bästa från brittisk rock & pop.", actualSongCount: getDynamicDefaultCount("british", 15), playCount: getDynamicDefaultPlayCount("british"), isDefault: true },
-    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", actualSongCount: getDynamicDefaultCount("hiphop90", 15), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
-    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", actualSongCount: getDynamicDefaultCount("epadunk", 15), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
+    { id: "british", name: "🇬🇧 Brittiska vågen", description: "Det bästa från brittisk rock & pop.", actualSongCount: getDynamicDefaultCount("british", MAX_SONGS_PER_LIST), playCount: getDynamicDefaultPlayCount("british"), isDefault: true },
+    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", actualSongCount: getDynamicDefaultCount("hiphop90", MAX_SONGS_PER_LIST), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
+    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", actualSongCount: getDynamicDefaultCount("epadunk", MAX_SONGS_PER_LIST), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
   ];
 
   // Extract custom presets (excluding the dynamic default ones)
@@ -443,9 +444,9 @@ async function startServer() {
       const cache = loadCachedPlaylists();
       const existingQuestions = cache[cacheKey] || [];
 
-      // If the cache already has 50 or more songs, return cached questions immediately.
+      // If the cache already has MAX_SONGS_PER_LIST or more songs, return cached questions immediately.
       // This bypasses both the Gemini call and the cooldown check!
-      if (existingQuestions.length >= 50) {
+      if (existingQuestions.length >= MAX_SONGS_PER_LIST) {
         console.log(`[Cache Hit] Serving fully loaded playlist for theme: ${theme} (count: ${existingQuestions.length})`);
         return res.json({ questions: existingQuestions });
       }
@@ -575,9 +576,9 @@ En array av objekt med följande tvingade fält:
         throw new Error(`Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst ${SONGS_PER_GAME}).`);
       }
 
-      // Cap at 50 options: "tills en lista har 50 alternativ"
-      if (mergedQuestions.length > 50) {
-        mergedQuestions.splice(50);
+      // Cap at MAX_SONGS_PER_LIST options: "tills en lista har 50 alternativ"
+      if (mergedQuestions.length > MAX_SONGS_PER_LIST) {
+        mergedQuestions.splice(MAX_SONGS_PER_LIST);
       }
 
       // Save updated list to cache
