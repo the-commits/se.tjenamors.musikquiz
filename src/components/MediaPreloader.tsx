@@ -30,6 +30,7 @@ export default function MediaPreloader({ roomState, onReportUnplayable }: MediaP
 }
 
 interface PreloadItemProps {
+  key?: string | number;
   question: any;
   onReportUnplayable: (youtubeLink: string) => void;
 }

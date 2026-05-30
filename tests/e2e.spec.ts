@@ -19,6 +19,14 @@ test.describe('Musikquiz Game Connectivity', () => {
     // Wait for the room PIN text
     await hostPage.waitForSelector('text=Spelkod / PIN');
 
+    // Verify the 6 default presets are presented in the lobby
+    await expect(hostPage.locator('text=🔥 Hits')).toBeVisible();
+    await expect(hostPage.locator('text=🇸🇪 Svenskt')).toBeVisible();
+    await expect(hostPage.locator('text=💿 2000-tal')).toBeVisible();
+    await expect(hostPage.locator('text=🇬🇧 Brittiska vågen')).toBeVisible();
+    await expect(hostPage.locator('text=🎤 90-tals Hiphop')).toBeVisible();
+    await expect(hostPage.locator('text=🚗 Epa-dunk')).toBeVisible();
+
     // Get the room code
     const element = await hostPage.locator('.tracking-widest.tabular-nums').innerText();
     const roomCode = element.trim();

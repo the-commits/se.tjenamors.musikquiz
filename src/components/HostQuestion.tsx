@@ -184,7 +184,7 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
           ref={audioRef}
           src={currentQuestion.preview_url}
           autoPlay
-          muted={roomState.status === 'buffering'}
+          muted={false}
           onError={() => setHasVideoError(true)}
           onPlay={handlePlay}
           className="hidden"

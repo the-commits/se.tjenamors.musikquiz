@@ -52,6 +52,7 @@ interface Player {
 
 type RoomStatus =
   | "lobby"
+  | "buffering"
   | "countdown"
   | "question"
   | "slow_reveal"
@@ -95,7 +96,7 @@ const rooms = new Map<string, Room>();
 const cachedPlaylistsPath = path.join(process.cwd(), "cached_playlists.json");
 let lastGenerationTime = 0;
 
-function loadCachedPlaylists(): Record<string, Question[]> {
+function loadCachedPlaylists(): Record<string, any> {
   try {
     if (fs.existsSync(cachedPlaylistsPath)) {
       return JSON.parse(fs.readFileSync(cachedPlaylistsPath, "utf8"));
@@ -111,6 +112,101 @@ function saveCachedPlaylists(data: Record<string, Question[]>) {
     fs.writeFileSync(cachedPlaylistsPath, JSON.stringify(data, null, 2), "utf8");
   } catch (e) {
     console.error("Failed to save cached_playlists.json", e);
+  }
+}
+
+async function getOrCreatePresetQuestions(presetId: string): Promise<Question[]> {
+  try {
+    const themeMap: Record<string, string> = {
+      british: "Brittiska vågen",
+      hiphop90: "90-tals Hiphop",
+      epadunk: "Epa-dunk"
+    };
+
+    const theme = themeMap[presetId];
+    if (!theme) return [];
+
+    const cacheKey = presetId;
+    const cache = loadCachedPlaylists();
+    const cachedEntry = cache[cacheKey];
+
+    if (cachedEntry) {
+      return Array.isArray(cachedEntry) ? cachedEntry : cachedEntry.questions;
+    }
+
+    const client = getGeminiClient();
+    if (!client) {
+      return [];
+    }
+
+    console.log(`[AI Auto-Generation] Generating default preset "${theme}" on the fly...`);
+    const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt 15 frågor. 
+Varje fråga måste representera en känd, mycket populär låt.
+För varje låt, ge en giltig YouTube-video (video ID, t.ex. 'unfzfe8f9NI' för ABBA Mamma Mia) och en starttid i sekunder där intro eller refräng börjar (t.ex. 30).
+Ge exakt 4 svarsalternativ där ett är rätt.
+
+Du måste svara strikt i JSON-format enligt detta schema:
+En array av objekt med följande tvingade fält:
+{
+  "artist": "Grupp eller artist",
+  "title": "Låttitel",
+  "youtube_link": "A valid 11-char YouTube ID",
+  "start_time": siffra (i sekunder, t.ex. 25),
+  "options": [4 stycken alternativerkombinationer, t.ex. "Låt - Artist" både låt och artist måste vara med. Det rätta svaret måste vara ett av alternativen!],
+  "correct_index": index för det rätta alternativet i arrayen (0-3)
+}`;
+
+    const response = await client.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              artist: { type: Type.STRING },
+              title: { type: Type.STRING },
+              youtube_link: { type: Type.STRING },
+              start_time: { type: Type.INTEGER },
+              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+              correct_index: { type: Type.INTEGER }
+            },
+            required: ["artist", "title", "youtube_link", "start_time", "options", "correct_index"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No text from Gemini");
+    const newQuestions = JSON.parse(text);
+
+    const enrichedQuestions = await Promise.all(
+      newQuestions.map(async (q: any, idx: number) => {
+        const enriched = await enrichWithItunes(q);
+        return {
+          ...enriched,
+          id: `ai_${idx}_${Date.now()}`
+        };
+      })
+    );
+
+    const validQuestions = enrichedQuestions.filter(q => q.youtube_link);
+
+    // Save to cache
+    cache[cacheKey] = {
+      theme: theme,
+      questions: validQuestions,
+      playCount: 0
+    };
+    saveCachedPlaylists(cache);
+
+    return validQuestions;
+  } catch (err) {
+    console.error(`Failed to get or create preset questions for ${presetId}:`, err);
+    return [];
   }
 }
 
@@ -203,16 +299,41 @@ function broadcastToRoom(room: Room, message: any) {
 }
 
 function sendRoomState(room: Room) {
-  // Build presets list
-  const presetsList: any[] = [
-    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", songCount: DEFAULT_QUESTIONS.length, playCount: 0, isDefault: true },
-    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", songCount: PRESET_QUZZES.swedish.length, playCount: 0, isDefault: true },
-    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: PRESET_QUZZES.millennium.length, playCount: 0, isDefault: true },
+  // Load caches to check sizes of dynamic defaults
+  const cache = loadCachedPlaylists();
+  
+  const getDynamicDefaultCount = (presetId: string, defaultValue: number) => {
+    const entry = cache[presetId];
+    if (entry) {
+      const q = Array.isArray(entry) ? entry : entry.questions;
+      return q.length;
+    }
+    return defaultValue;
+  };
+
+  const getDynamicDefaultPlayCount = (presetId: string) => {
+    const entry = cache[presetId];
+    if (entry && !Array.isArray(entry)) {
+      return entry.playCount || 0;
+    }
+    return 0;
+  };
+
+  const defaultPresets: any[] = [
+    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", songCount: DEFAULT_QUESTIONS.length, playCount: getDynamicDefaultPlayCount("default"), isDefault: true },
+    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", songCount: PRESET_QUZZES.swedish.length, playCount: getDynamicDefaultPlayCount("swedish"), isDefault: true },
+    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: PRESET_QUZZES.millennium.length, playCount: getDynamicDefaultPlayCount("millennium"), isDefault: true },
+    { id: "british", name: "🇬🇧 Brittiska vågen", description: "Det bästa från brittisk rock & pop.", songCount: getDynamicDefaultCount("british", 15), playCount: getDynamicDefaultPlayCount("british"), isDefault: true },
+    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", songCount: getDynamicDefaultCount("hiphop90", 15), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
+    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", songCount: getDynamicDefaultCount("epadunk", 15), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
   ];
 
-  const cache = loadCachedPlaylists();
+  // Extract custom presets (excluding the dynamic default ones)
   const customPresets: any[] = [];
+  const defaultKeys = new Set(["default", "swedish", "millennium", "british", "hiphop90", "epadunk"]);
   for (const [key, entry] of Object.entries(cache)) {
+    if (defaultKeys.has(key)) continue;
+
     const questions = Array.isArray(entry) ? entry : entry.questions;
     const playCount = Array.isArray(entry) ? 0 : (entry.playCount || 0);
     const theme = Array.isArray(entry) ? key : (entry.theme || key);
@@ -226,28 +347,38 @@ function sendRoomState(room: Room) {
       description: `AI-skapad spellista.`,
       songCount: questions.length,
       playCount: playCount,
+      isDefault: false
     });
   }
 
-  // Sort custom presets:
+  // Combine all lists
+  const allPresets = [...defaultPresets, ...customPresets];
+
+  // Rank all playlists:
   // 1. Most songs (up to 50)
   // 2. Play count
-  customPresets.sort((a, b) => {
+  // 3. Defaults have priority if counts are equal (keep isDefault sorted higher)
+  allPresets.sort((a, b) => {
     if (b.songCount !== a.songCount) {
       return b.songCount - a.songCount;
     }
-    return b.playCount - a.playCount;
+    if (b.playCount !== a.playCount) {
+      return b.playCount - a.playCount;
+    }
+    const aDef = a.isDefault ? 1 : 0;
+    const bDef = b.isDefault ? 1 : 0;
+    return bDef - aDef;
   });
 
-  // Limit to top 1 custom preset so that we have a maximum of 4 playlists presented!
-  const topCustomPresets = customPresets.slice(0, 1);
+  // Limit to top 6 presets presented in the lobby
+  const presentedPresets = allPresets.slice(0, 6);
 
   // Map internal state to RoomState matching client types
   const statePayload = {
     code: room.code,
     status: room.status,
     players: room.players,
-    presets: [...presetsList, ...topCustomPresets],
+    presets: presentedPresets,
     questions: room.questions.map((q) => ({
       id: q.id,
       artist: q.artist,
@@ -257,8 +388,6 @@ function sendRoomState(room: Room) {
       cover_url: q.cover_url,
       start_time: q.start_time,
       options: q.options,
-      question_text: q.question_text,
-      question_type: q.question_type,
       // Hide correct index if we are currently mid-question to prevent cheating
       correct_index:
         room.status === "slow_reveal" ||
@@ -488,6 +617,17 @@ En array av objekt med följande tvingade fält:
 
              if (message.preset && PRESET_QUZZES[message.preset]) {
               finalQuestions = PRESET_QUZZES[message.preset];
+            } else if (message.preset && (message.preset === "british" || message.preset === "hiphop90" || message.preset === "epadunk")) {
+              finalQuestions = await getOrCreatePresetQuestions(message.preset);
+              
+              // Increment play count and save back to cache file
+              const cache = loadCachedPlaylists();
+              const cachedEntry = cache[message.preset];
+              if (cachedEntry && !Array.isArray(cachedEntry)) {
+                cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
+                cache[message.preset] = cachedEntry;
+                saveCachedPlaylists(cache);
+              }
             } else if (message.preset && message.preset.startsWith("custom_")) {
               const cacheKey = message.preset.replace("custom_", "");
               const cache = loadCachedPlaylists();
@@ -898,7 +1038,7 @@ En array av objekt med följande tvingade fält:
     });
   }
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
   server.listen(PORT, "0.0.0.0", () => {
     console.log(
       `Musikquiz full-stack server listening on http://localhost:${PORT}`,
