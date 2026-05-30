@@ -203,11 +203,51 @@ function broadcastToRoom(room: Room, message: any) {
 }
 
 function sendRoomState(room: Room) {
+  // Build presets list
+  const presetsList: any[] = [
+    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", songCount: DEFAULT_QUESTIONS.length, playCount: 0, isDefault: true },
+    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", songCount: PRESET_QUZZES.swedish.length, playCount: 0, isDefault: true },
+    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: PRESET_QUZZES.millennium.length, playCount: 0, isDefault: true },
+  ];
+
+  const cache = loadCachedPlaylists();
+  const customPresets: any[] = [];
+  for (const [key, entry] of Object.entries(cache)) {
+    const questions = Array.isArray(entry) ? entry : entry.questions;
+    const playCount = Array.isArray(entry) ? 0 : (entry.playCount || 0);
+    const theme = Array.isArray(entry) ? key : (entry.theme || key);
+    
+    // Capitalize display name cleanly
+    const displayName = theme.charAt(0).toUpperCase() + theme.slice(1);
+
+    customPresets.push({
+      id: `custom_${key}`,
+      name: `✨ ${displayName}`,
+      description: `AI-skapad spellista.`,
+      songCount: questions.length,
+      playCount: playCount,
+    });
+  }
+
+  // Sort custom presets:
+  // 1. Most songs (up to 50)
+  // 2. Play count
+  customPresets.sort((a, b) => {
+    if (b.songCount !== a.songCount) {
+      return b.songCount - a.songCount;
+    }
+    return b.playCount - a.playCount;
+  });
+
+  // Limit to top 1 custom preset so that we have a maximum of 4 playlists presented!
+  const topCustomPresets = customPresets.slice(0, 1);
+
   // Map internal state to RoomState matching client types
   const statePayload = {
     code: room.code,
     status: room.status,
     players: room.players,
+    presets: [...presetsList, ...topCustomPresets],
     questions: room.questions.map((q) => ({
       id: q.id,
       artist: q.artist,
@@ -217,6 +257,8 @@ function sendRoomState(room: Room) {
       cover_url: q.cover_url,
       start_time: q.start_time,
       options: q.options,
+      question_text: q.question_text,
+      question_type: q.question_type,
       // Hide correct index if we are currently mid-question to prevent cheating
       correct_index:
         room.status === "slow_reveal" ||
@@ -444,8 +486,22 @@ En array av objekt med följande tvingade fält:
             const code = generateRoomCode();
             let finalQuestions = DEFAULT_QUESTIONS;
 
-            if (message.preset && PRESET_QUZZES[message.preset]) {
+             if (message.preset && PRESET_QUZZES[message.preset]) {
               finalQuestions = PRESET_QUZZES[message.preset];
+            } else if (message.preset && message.preset.startsWith("custom_")) {
+              const cacheKey = message.preset.replace("custom_", "");
+              const cache = loadCachedPlaylists();
+              const cachedEntry = cache[cacheKey];
+              if (cachedEntry) {
+                finalQuestions = Array.isArray(cachedEntry) ? cachedEntry : cachedEntry.questions;
+                
+                // Increment play count and save back to cache file
+                if (!Array.isArray(cachedEntry)) {
+                  cachedEntry.playCount = (cachedEntry.playCount || 0) + 1;
+                  cache[cacheKey] = cachedEntry;
+                  saveCachedPlaylists(cache);
+                }
+              }
             } else if (
               message.customQuestions &&
               Array.isArray(message.customQuestions) &&

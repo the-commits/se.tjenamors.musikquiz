@@ -230,7 +230,9 @@ export default function App() {
       }
       if (data.questions && Array.isArray(data.questions)) {
         // Re-create host room with these questions
-        handleHostCreate('custom', data.questions);
+        const customId = `custom_${theme.trim().toLowerCase()}`;
+        setSelectedPreset(customId);
+        handleHostCreate(customId, data.questions);
       } else {
         throw new Error("Genererade frågor var felformaterade.");
       }

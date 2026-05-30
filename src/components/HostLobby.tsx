@@ -125,43 +125,46 @@ export default function HostLobby({
             <div className="bg-white/10 p-2 rounded-xl"><Music className="w-5 h-5 text-yellow-400" /></div>
             Välj eller skapa er spellista
           </h3>
+ 
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            {(roomState.presets || [
+              { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", songCount: 10, playCount: 0 },
+              { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", songCount: 10, playCount: 0 },
+              { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", songCount: 10, playCount: 0 }
+            ]).map((preset, idx) => {
+              const isSelected = selectedPreset === preset.id;
+              // Cycle through gradient colors for variety
+              const gradientClass = preset.id === 'default' || idx % 3 === 0
+                ? 'from-pink-500/20 to-fuchsia-500/20 border-pink-500/50 shadow-pink-500/20'
+                : preset.id === 'swedish' || idx % 3 === 1
+                ? 'from-cyan-500/20 to-blue-500/20 border-cyan-500/50 shadow-cyan-500/20'
+                : 'from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-yellow-500/20';
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <button
-              onClick={() => onSelectPreset('default')}
-              className={`p-5 rounded-3xl border text-left transition-all ${
-                selectedPreset === 'default'
-                  ? 'bg-gradient-to-r from-pink-500/20 to-fuchsia-500/20 border-pink-500/50 text-white shadow-lg shadow-pink-500/20'
-                  : 'bg-black/20 border-white/10 text-indigo-300 hover:border-white/30'
-              }`}
-            >
-              <div className="font-black text-lg mb-1">🔥 Hits</div>
-              <p className="text-sm opacity-80 leading-snug font-medium">Blandade populära låtar.</p>
-            </button>
-
-            <button
-              onClick={() => onSelectPreset('swedish')}
-              className={`p-5 rounded-3xl border text-left transition-all ${
-                selectedPreset === 'swedish'
-                  ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/50 text-white shadow-lg shadow-cyan-500/20'
-                  : 'bg-black/20 border-white/10 text-indigo-300 hover:border-white/30'
-              }`}
-            >
-              <div className="font-black text-lg mb-1">🇸🇪 Svenskt</div>
-              <p className="text-sm opacity-80 leading-snug font-medium">Svenska klassiker o hits.</p>
-            </button>
-
-            <button
-              onClick={() => onSelectPreset('millennium')}
-              className={`p-5 rounded-3xl border text-left transition-all ${
-                selectedPreset === 'millennium'
-                  ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50 text-white shadow-lg shadow-yellow-500/20'
-                  : 'bg-black/20 border-white/10 text-indigo-300 hover:border-white/30'
-              }`}
-            >
-              <div className="font-black text-lg mb-1">💿 2000-tal</div>
-              <p className="text-sm opacity-80 leading-snug font-medium">Nostalgi från tidigt 00-tal.</p>
-            </button>
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => onSelectPreset(preset.id)}
+                  className={`p-5 rounded-3xl border text-left transition-all relative group flex flex-col justify-between min-h-[140px] ${
+                    isSelected
+                      ? `bg-gradient-to-r ${gradientClass} text-white shadow-lg`
+                      : 'bg-black/20 border-white/10 text-indigo-300 hover:border-white/30'
+                  }`}
+                >
+                  <div>
+                    <div className="font-black text-lg mb-1">{preset.name}</div>
+                    <p className="text-xs opacity-80 leading-snug font-medium pr-8">{preset.description}</p>
+                  </div>
+                  <div className="mt-3 flex justify-between items-center text-[10px] uppercase tracking-wider font-black opacity-80">
+                    <span>{preset.songCount} låtar</span>
+                    {preset.playCount > 0 && (
+                      <span className="bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                        {preset.playCount} spelningar
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           <form onSubmit={handleGenerate} className="bg-black/20 p-5 rounded-3xl border border-white/10">

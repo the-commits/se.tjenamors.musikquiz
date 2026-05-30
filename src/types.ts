@@ -22,10 +22,20 @@ export interface Player {
 
 export type RoomStatus = 'lobby' | 'buffering' | 'countdown' | 'question' | 'slow_reveal' | 'scoreboard' | 'ended';
 
+export interface PresetInfo {
+  id: string;
+  name: string;
+  description: string;
+  songCount: number;
+  playCount: number;
+  isDefault?: boolean;
+}
+
 export interface RoomState {
   code: string;
   status: RoomStatus;
   players: Player[];
+  presets?: PresetInfo[];
   questions: Question[];
   currentQuestionIndex: number;
   questionTimer: number; // Seconds remaining
