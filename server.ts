@@ -248,7 +248,7 @@ En array av objekt med följande tvingade fält:
   "title": "Låttitel",
   "youtube_link": "A valid 11-char YouTube ID",
   "start_time": siffra (i sekunder, t.ex. 25),
-  "options": [4 stycken alternativerkombinationer, t.ex. "Låt - Artist" eller bara låtnamn. Ta med det rätta svaret som ett av alternativen!],
+  "options": [4 stycken alternativerkombinationer, t.ex. "Låt - Artist" både låt och artist måste vara med. Det rätta svaret måste vara ett av alternativen!],
   "correct_index": index för det rätta alternativet i arrayen (0-3)
 }`;
 
