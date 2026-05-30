@@ -111,14 +111,16 @@ function loadCachedPlaylists(): Record<string, any> {
           cache[key] = {
             theme: key,
             questions: val,
-            playCount: 0
+            playCount: 0,
           };
           migrated = true;
         }
       }
       if (migrated) {
         saveCachedPlaylists(cache);
-        console.log("[Cache Migration] Successfully migrated legacy array playlists to object format in cached_playlists.json");
+        console.log(
+          "[Cache Migration] Successfully migrated legacy array playlists to object format in cached_playlists.json",
+        );
       }
       return cache;
     }
@@ -130,17 +132,23 @@ function loadCachedPlaylists(): Record<string, any> {
 
 function saveCachedPlaylists(data: Record<string, any>) {
   try {
-    fs.writeFileSync(cachedPlaylistsPath, JSON.stringify(data, null, 2), "utf8");
+    fs.writeFileSync(
+      cachedPlaylistsPath,
+      JSON.stringify(data, null, 2),
+      "utf8",
+    );
   } catch (e) {
     console.error("Failed to save cached_playlists.json", e);
   }
 }
 
-async function getOrCreatePresetQuestions(presetId: string): Promise<Question[]> {
+async function getOrCreatePresetQuestions(
+  presetId: string,
+): Promise<Question[]> {
   try {
     const themeMap: Record<string, string> = {
       hiphop90: "90-tals Hiphop",
-      epadunk: "Epa-dunk"
+      epadunk: "Epa-dunk",
     };
 
     const theme = themeMap[presetId];
@@ -159,7 +167,9 @@ async function getOrCreatePresetQuestions(presetId: string): Promise<Question[]>
       return [];
     }
 
-    console.log(`[AI Auto-Generation] Generating default preset "${theme}" on the fly...`);
+    console.log(
+      `[AI Auto-Generation] Generating default preset "${theme}" on the fly...`,
+    );
     const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt ${MAX_SONGS_PER_LIST} frågor. 
 Varje fråga måste representera en känd, mycket populär låt.
 För varje låt, ge en giltig YouTube-video (video ID, t.ex. 'unfzfe8f9NI' för ABBA Mamma Mia) och en starttid i sekunder där intro eller refräng börjar (t.ex. 30).
@@ -191,12 +201,19 @@ En array av objekt med följande tvingade fält:
               youtube_link: { type: Type.STRING },
               start_time: { type: Type.INTEGER },
               options: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correct_index: { type: Type.INTEGER }
+              correct_index: { type: Type.INTEGER },
             },
-            required: ["artist", "title", "youtube_link", "start_time", "options", "correct_index"]
-          }
-        }
-      }
+            required: [
+              "artist",
+              "title",
+              "youtube_link",
+              "start_time",
+              "options",
+              "correct_index",
+            ],
+          },
+        },
+      },
     });
 
     const text = response.text;
@@ -209,22 +226,25 @@ En array av objekt med följande tvingade fält:
         enriched.id = `ai_${idx}_${Date.now()}`;
         const cached = await downloadAndCacheMedia(enriched);
         return cached;
-      })
+      }),
     );
 
-    const validQuestions = enrichedQuestions.filter(q => q.youtube_link);
+    const validQuestions = enrichedQuestions.filter((q) => q.youtube_link);
 
     // Save to cache
     cache[cacheKey] = {
       theme: theme,
       questions: validQuestions,
-      playCount: 0
+      playCount: 0,
     };
     saveCachedPlaylists(cache);
 
     return validQuestions;
   } catch (err) {
-    console.error(`Failed to get or create preset questions for ${presetId}:`, err);
+    console.error(
+      `Failed to get or create preset questions for ${presetId}:`,
+      err,
+    );
     return [];
   }
 }
@@ -288,14 +308,14 @@ if (!fs.existsSync(mediaDir)) {
 function pruneMediaCacheIfNeeded() {
   try {
     const files = fs.readdirSync(mediaDir);
-    const fileStats = files.map(file => {
+    const fileStats = files.map((file) => {
       const filePath = path.join(mediaDir, file);
       const stat = fs.statSync(filePath);
       return {
         name: file,
         path: filePath,
         size: stat.size,
-        mtime: stat.mtimeMs
+        mtime: stat.mtimeMs,
       };
     });
 
@@ -303,7 +323,9 @@ function pruneMediaCacheIfNeeded() {
     const MAX_CACHE_SIZE = 256 * 1024 * 1024; // 256 MB
 
     if (totalSize > MAX_CACHE_SIZE) {
-      console.log(`[Media Cache Pruning] Cache size (${(totalSize / 1024 / 1024).toFixed(2)} MB) exceeds limit of 256 MB. Pruning...`);
+      console.log(
+        `[Media Cache Pruning] Cache size (${(totalSize / 1024 / 1024).toFixed(2)} MB) exceeds limit of 256 MB. Pruning...`,
+      );
       // Sort files by last modified time (oldest first)
       fileStats.sort((a, b) => a.mtime - b.mtime);
 
@@ -312,12 +334,19 @@ function pruneMediaCacheIfNeeded() {
         try {
           fs.unlinkSync(f.path);
           totalSize -= f.size;
-          console.log(`[Media Cache Pruning] Deleted oldest cache file: ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)`);
+          console.log(
+            `[Media Cache Pruning] Deleted oldest cache file: ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)`,
+          );
         } catch (err) {
-          console.error(`[Media Cache Pruning] Failed to delete file ${f.path}:`, err);
+          console.error(
+            `[Media Cache Pruning] Failed to delete file ${f.path}:`,
+            err,
+          );
         }
       }
-      console.log(`[Media Cache Pruning] Pruning complete. New cache size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+      console.log(
+        `[Media Cache Pruning] Pruning complete. New cache size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`,
+      );
     }
   } catch (err) {
     console.error("[Media Cache Pruning] Error pruning media cache:", err);
@@ -340,25 +369,32 @@ async function downloadAndCacheMedia(q: Question): Promise<Question> {
       return q;
     }
 
-    console.log(`[Media Cache] Downloading preview for: ${q.artist} - ${q.title}...`);
+    console.log(
+      `[Media Cache] Downloading preview for: ${q.artist} - ${q.title}...`,
+    );
     const res = await fetch(q.preview_url);
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const buffer = await res.arrayBuffer();
     fs.writeFileSync(destPath, Buffer.from(buffer));
-    
+
     // Check and prune cache if size exceeds 256 MB
     pruneMediaCacheIfNeeded();
-    
+
     q.preview_url = `/media/${filename}`;
     console.log(`[Media Cache] Successfully cached to ${q.preview_url}`);
   } catch (err) {
-    console.error(`[Media Cache] Failed to download media for ${q.artist} - ${q.title}:`, err);
+    console.error(
+      `[Media Cache] Failed to download media for ${q.artist} - ${q.title}:`,
+      err,
+    );
   }
   return q;
 }
 
 async function cacheAllBuiltInPlaylistsMedia() {
-  console.log("[Media Cache] Pre-caching built-in playlists media in background...");
+  console.log(
+    "[Media Cache] Pre-caching built-in playlists media in background...",
+  );
   for (const q of DEFAULT_QUESTIONS) {
     await downloadAndCacheMedia(q);
   }
@@ -380,7 +416,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateRoomCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890*@$&";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
   let code = "";
   do {
     code = "";
@@ -410,7 +446,7 @@ function broadcastToRoom(room: Room, message: any) {
 function sendRoomState(room: Room) {
   // Load caches to check sizes of dynamic defaults
   const cache = loadCachedPlaylists();
-  
+
   const getDynamicDefaultCount = (presetId: string, defaultValue: number) => {
     const entry = cache[presetId];
     if (entry) {
@@ -429,23 +465,64 @@ function sendRoomState(room: Room) {
   };
 
   const defaultPresets: any[] = [
-    { id: "default", name: "🔥 Hits", description: "Blandade populära låtar.", actualSongCount: DEFAULT_QUESTIONS.length, playCount: getDynamicDefaultPlayCount("default"), isDefault: true },
-    { id: "swedish", name: "🇸🇪 Svenskt", description: "Svenska klassiker o hits.", actualSongCount: PRESET_QUZZES.swedish.length, playCount: getDynamicDefaultPlayCount("swedish"), isDefault: true },
-    { id: "millennium", name: "💿 2000-tal", description: "Nostalgi från tidigt 00-tal.", actualSongCount: PRESET_QUZZES.millennium.length, playCount: getDynamicDefaultPlayCount("millennium"), isDefault: true },
-    { id: "hiphop90", name: "🎤 90-tals Hiphop", description: "Klassisk hiphop från 90-talet.", actualSongCount: getDynamicDefaultCount("hiphop90", MAX_SONGS_PER_LIST), playCount: getDynamicDefaultPlayCount("hiphop90"), isDefault: true },
-    { id: "epadunk", name: "🚗 Epa-dunk", description: "Riktigt bra epa-dunk och festmusik.", actualSongCount: getDynamicDefaultCount("epadunk", MAX_SONGS_PER_LIST), playCount: getDynamicDefaultPlayCount("epadunk"), isDefault: true },
+    {
+      id: "default",
+      name: "🔥 Hits",
+      description: "Blandade populära låtar.",
+      actualSongCount: DEFAULT_QUESTIONS.length,
+      playCount: getDynamicDefaultPlayCount("default"),
+      isDefault: true,
+    },
+    {
+      id: "swedish",
+      name: "🇸🇪 Svenskt",
+      description: "Svenska klassiker o hits.",
+      actualSongCount: PRESET_QUZZES.swedish.length,
+      playCount: getDynamicDefaultPlayCount("swedish"),
+      isDefault: true,
+    },
+    {
+      id: "millennium",
+      name: "💿 2000-tal",
+      description: "Nostalgi från tidigt 00-tal.",
+      actualSongCount: PRESET_QUZZES.millennium.length,
+      playCount: getDynamicDefaultPlayCount("millennium"),
+      isDefault: true,
+    },
+    {
+      id: "hiphop90",
+      name: "🎤 90-tals Hiphop",
+      description: "Klassisk hiphop från 90-talet.",
+      actualSongCount: getDynamicDefaultCount("hiphop90", MAX_SONGS_PER_LIST),
+      playCount: getDynamicDefaultPlayCount("hiphop90"),
+      isDefault: true,
+    },
+    {
+      id: "epadunk",
+      name: "🚗 Epa-dunk",
+      description: "Riktigt bra epa-dunk och festmusik.",
+      actualSongCount: getDynamicDefaultCount("epadunk", MAX_SONGS_PER_LIST),
+      playCount: getDynamicDefaultPlayCount("epadunk"),
+      isDefault: true,
+    },
   ];
 
   // Extract custom presets (excluding the dynamic default ones)
   const customPresets: any[] = [];
-  const defaultKeys = new Set(["default", "swedish", "millennium", "hiphop90", "epadunk"]);
+  const defaultKeys = new Set([
+    "default",
+    "swedish",
+    "millennium",
+    "hiphop90",
+    "epadunk",
+  ]);
   for (const [key, entry] of Object.entries(cache)) {
     if (defaultKeys.has(key)) continue;
 
-    const questions = Array.isArray(entry) ? entry : (entry.questions || []);
-    const playCount = Array.isArray(entry) ? 0 : (entry.playCount || 0);
-    const theme = Array.isArray(entry) ? key : (entry.theme || key);
-    
+    const questions = Array.isArray(entry) ? entry : entry.questions || [];
+    const playCount = Array.isArray(entry) ? 0 : entry.playCount || 0;
+    const theme = Array.isArray(entry) ? key : entry.theme || key;
+
     // Capitalize display name cleanly
     const displayName = theme.charAt(0).toUpperCase() + theme.slice(1);
 
@@ -455,7 +532,7 @@ function sendRoomState(room: Room) {
       description: `AI-skapad spellista.`,
       actualSongCount: questions.length,
       playCount: playCount,
-      isDefault: false
+      isDefault: false,
     });
   }
 
@@ -479,13 +556,13 @@ function sendRoomState(room: Room) {
   });
 
   // Limit to top 3 presets presented in the lobby and display SONGS_PER_GAME (10) as their song count
-  const presentedPresets = allPresets.slice(0, 3).map(preset => ({
+  const presentedPresets = allPresets.slice(0, 3).map((preset) => ({
     id: preset.id,
     name: preset.name,
     description: preset.description,
     songCount: SONGS_PER_GAME,
     playCount: preset.playCount,
-    isDefault: preset.isDefault
+    isDefault: preset.isDefault,
   }));
 
   // Map internal state to RoomState matching client types
@@ -494,25 +571,26 @@ function sendRoomState(room: Room) {
     status: room.status,
     players: room.players,
     presets: presentedPresets,
-    questions: room.status === "lobby"
-      ? room.questions.map((q) => ({ id: q.id } as any))
-      : room.questions.map((q) => ({
-          id: q.id,
-          artist: q.artist,
-          title: q.title,
-          youtube_link: q.youtube_link,
-          preview_url: q.preview_url,
-          cover_url: q.cover_url,
-          start_time: q.start_time,
-          options: q.options,
-          // Hide correct index if we are currently mid-question to prevent cheating
-          correct_index:
-            room.status === "slow_reveal" ||
-            room.status === "scoreboard" ||
-            room.status === "ended"
-              ? q.correct_index
-              : -1,
-        })),
+    questions:
+      room.status === "lobby"
+        ? room.questions.map((q) => ({ id: q.id }) as any)
+        : room.questions.map((q) => ({
+            id: q.id,
+            artist: q.artist,
+            title: q.title,
+            youtube_link: q.youtube_link,
+            preview_url: q.preview_url,
+            cover_url: q.cover_url,
+            start_time: q.start_time,
+            options: q.options,
+            // Hide correct index if we are currently mid-question to prevent cheating
+            correct_index:
+              room.status === "slow_reveal" ||
+              room.status === "scoreboard" ||
+              room.status === "ended"
+                ? q.correct_index
+                : -1,
+          })),
     currentQuestionIndex: room.currentQuestionIndex,
     questionTimer: room.questionTimer,
     questionDuration: room.questionDuration,
@@ -552,13 +630,17 @@ async function startServer() {
       const cache = loadCachedPlaylists();
       const cachedEntry = cache[cacheKey];
       const existingQuestions = cachedEntry
-        ? (Array.isArray(cachedEntry) ? cachedEntry : (cachedEntry.questions || []))
+        ? Array.isArray(cachedEntry)
+          ? cachedEntry
+          : cachedEntry.questions || []
         : [];
 
       // If the cache already has MAX_SONGS_PER_LIST or more songs, return cached questions immediately.
       // This bypasses both the Gemini call and the cooldown check!
       if (existingQuestions.length >= MAX_SONGS_PER_LIST) {
-        console.log(`[Cache Hit] Serving fully loaded playlist for theme: ${theme} (count: ${existingQuestions.length})`);
+        console.log(
+          `[Cache Hit] Serving fully loaded playlist for theme: ${theme} (count: ${existingQuestions.length})`,
+        );
         return res.json({ questions: existingQuestions });
       }
 
@@ -569,7 +651,9 @@ async function startServer() {
         // If cooldown is active, but we already have at least SONGS_PER_GAME songs cached for this theme,
         // we can bypass the cooldown error and serve the cached questions!
         if (existingQuestions.length >= SONGS_PER_GAME) {
-          console.log(`[Cache Cooldown Bypass] Serving existing cached playlist for theme: ${theme} (count: ${existingQuestions.length}) due to active cooldown.`);
+          console.log(
+            `[Cache Cooldown Bypass] Serving existing cached playlist for theme: ${theme} (count: ${existingQuestions.length}) due to active cooldown.`,
+          );
           return res.json({ questions: existingQuestions });
         }
 
@@ -583,11 +667,15 @@ async function startServer() {
 
       // Calculate how many songs to fetch. We aim to fetch SONGS_PER_GEN.
       const fetchAmount = SONGS_PER_GEN;
-      console.log(`[AI Generation] Fetching ${fetchAmount} songs for theme "${theme}" (existing cached count: ${existingQuestions.length})`);
+      console.log(
+        `[AI Generation] Fetching ${fetchAmount} songs for theme "${theme}" (existing cached count: ${existingQuestions.length})`,
+      );
 
       // Prepare list of existing songs to avoid duplicates
-      const existingSongsStr = existingQuestions.map(q => `${q.artist} - ${q.title}`).join(", ");
-      const avoidInstructions = existingSongsStr 
+      const existingSongsStr = existingQuestions
+        .map((q) => `${q.artist} - ${q.title}`)
+        .join(", ");
+      const avoidInstructions = existingSongsStr
         ? `\nVIKTIGT: Undvik att generera följande låtar som redan finns i spellistan: ${existingSongsStr}`
         : "";
 
@@ -666,15 +754,17 @@ En array av objekt med följande tvingade fält:
           enriched.id = `ai_${idx}_${Date.now()}`;
           const cached = await downloadAndCacheMedia(enriched);
           return cached;
-        })
+        }),
       );
 
       // Merge existing and new, avoiding duplicates by YouTube Link or Title/Artist matching
       const mergedQuestions = [...existingQuestions];
       for (const newQ of enrichedQuestions) {
         const isDuplicate = mergedQuestions.some(
-          eq => eq.youtube_link === newQ.youtube_link || 
-          (eq.artist.toLowerCase() === newQ.artist.toLowerCase() && eq.title.toLowerCase() === newQ.title.toLowerCase())
+          (eq) =>
+            eq.youtube_link === newQ.youtube_link ||
+            (eq.artist.toLowerCase() === newQ.artist.toLowerCase() &&
+              eq.title.toLowerCase() === newQ.title.toLowerCase()),
         );
         if (!isDuplicate && newQ.youtube_link) {
           mergedQuestions.push(newQ);
@@ -683,7 +773,9 @@ En array av objekt med följande tvingade fält:
 
       // Check min size: "alltid ha minst SONGS_PER_GAME låtar i listan"
       if (mergedQuestions.length < SONGS_PER_GAME) {
-        throw new Error(`Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst ${SONGS_PER_GAME}).`);
+        throw new Error(
+          `Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst ${SONGS_PER_GAME}).`,
+        );
       }
 
       // Cap at MAX_SONGS_PER_LIST options: "tills en lista har 50 alternativ"
@@ -692,17 +784,22 @@ En array av objekt med följande tvingade fält:
       }
 
       // Save updated list to cache in unified object format
-      const currentPlayCount = cachedEntry && !Array.isArray(cachedEntry) ? (cachedEntry.playCount || 0) : 0;
+      const currentPlayCount =
+        cachedEntry && !Array.isArray(cachedEntry)
+          ? cachedEntry.playCount || 0
+          : 0;
       cache[cacheKey] = {
         theme: theme,
         questions: mergedQuestions,
-        playCount: currentPlayCount
+        playCount: currentPlayCount,
       };
       saveCachedPlaylists(cache);
 
       // Successfully generated, update lastGenerationTime
       lastGenerationTime = Date.now();
-      console.log(`[AI Generation Success] Playlist for theme "${theme}" now has ${mergedQuestions.length} songs. Cooldown triggered.`);
+      console.log(
+        `[AI Generation Success] Playlist for theme "${theme}" now has ${mergedQuestions.length} songs. Cooldown triggered.`,
+      );
 
       res.json({ questions: mergedQuestions });
     } catch (err: any) {
@@ -740,16 +837,21 @@ En array av objekt med följande tvingade fält:
             const code = generateRoomCode();
             let finalQuestions = DEFAULT_QUESTIONS;
 
-             if (message.preset && PRESET_QUZZES[message.preset]) {
+            if (message.preset && PRESET_QUZZES[message.preset]) {
               finalQuestions = PRESET_QUZZES[message.preset];
-            } else if (message.preset && (message.preset === "hiphop90" || message.preset === "epadunk")) {
+            } else if (
+              message.preset &&
+              (message.preset === "hiphop90" || message.preset === "epadunk")
+            ) {
               finalQuestions = await getOrCreatePresetQuestions(message.preset);
             } else if (message.preset && message.preset.startsWith("custom_")) {
               const cacheKey = message.preset.replace("custom_", "");
               const cache = loadCachedPlaylists();
               const cachedEntry = cache[cacheKey];
               if (cachedEntry) {
-                finalQuestions = Array.isArray(cachedEntry) ? cachedEntry : cachedEntry.questions;
+                finalQuestions = Array.isArray(cachedEntry)
+                  ? cachedEntry
+                  : cachedEntry.questions;
               }
             } else if (
               message.customQuestions &&
@@ -844,10 +946,10 @@ En array av objekt med följande tvingade fält:
               } else {
                 // No backup questions available. Skip this song by removing it from the active questions array.
                 console.log(
-                  `[Host Report] No backup questions available. Skipping unplayable song: ${room.questions[room.currentQuestionIndex]?.title || youtubeLink}`
+                  `[Host Report] No backup questions available. Skipping unplayable song: ${room.questions[room.currentQuestionIndex]?.title || youtubeLink}`,
                 );
                 room.questions.splice(room.currentQuestionIndex, 1);
-                
+
                 if (room.currentQuestionIndex >= room.questions.length) {
                   // No more songs left, end the game!
                   room.status = "ended";
@@ -856,12 +958,14 @@ En array av objekt med följande tvingade fält:
                   if (room.preset) {
                     const presetId = room.preset;
                     const isCustom = presetId.startsWith("custom_");
-                    const cacheKey = isCustom ? presetId.replace("custom_", "") : presetId;
+                    const cacheKey = isCustom
+                      ? presetId.replace("custom_", "")
+                      : presetId;
 
                     const cache = loadCachedPlaylists();
                     if (!cache[cacheKey]) {
                       cache[cacheKey] = {
-                        playCount: 0
+                        playCount: 0,
                       };
                     }
 
@@ -869,7 +973,9 @@ En array av objekt med följande tvingade fält:
                     if (entry && !Array.isArray(entry)) {
                       entry.playCount = (entry.playCount || 0) + 1;
                       saveCachedPlaylists(cache);
-                      console.log(`[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`);
+                      console.log(
+                        `[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`,
+                      );
                     }
                   }
                 }
@@ -938,7 +1044,11 @@ En array av objekt med följande tvingade fält:
             if (requestedCount < 1) requestedCount = SONGS_PER_GAME;
 
             const listSize = room.questions.length;
-            const finalCount = Math.min(requestedCount, listSize, MAX_SONGS_PER_LIST);
+            const finalCount = Math.min(
+              requestedCount,
+              listSize,
+              MAX_SONGS_PER_LIST,
+            );
 
             // Slice the stored questions
             const questionsToPlay = room.questions.slice(0, finalCount);
@@ -1059,12 +1169,14 @@ En array av objekt med följande tvingade fält:
                 if (room.preset) {
                   const presetId = room.preset;
                   const isCustom = presetId.startsWith("custom_");
-                  const cacheKey = isCustom ? presetId.replace("custom_", "") : presetId;
+                  const cacheKey = isCustom
+                    ? presetId.replace("custom_", "")
+                    : presetId;
 
                   const cache = loadCachedPlaylists();
                   if (!cache[cacheKey]) {
                     cache[cacheKey] = {
-                      playCount: 0
+                      playCount: 0,
                     };
                   }
 
@@ -1072,7 +1184,9 @@ En array av objekt med följande tvingade fält:
                   if (entry && !Array.isArray(entry)) {
                     entry.playCount = (entry.playCount || 0) + 1;
                     saveCachedPlaylists(cache);
-                    console.log(`[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`);
+                    console.log(
+                      `[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`,
+                    );
                   }
                 }
               } else {
@@ -1089,12 +1203,14 @@ En array av objekt med följande tvingade fält:
                 if (room.preset) {
                   const presetId = room.preset;
                   const isCustom = presetId.startsWith("custom_");
-                  const cacheKey = isCustom ? presetId.replace("custom_", "") : presetId;
+                  const cacheKey = isCustom
+                    ? presetId.replace("custom_", "")
+                    : presetId;
 
                   const cache = loadCachedPlaylists();
                   if (!cache[cacheKey]) {
                     cache[cacheKey] = {
-                      playCount: 0
+                      playCount: 0,
                     };
                   }
 
@@ -1102,7 +1218,9 @@ En array av objekt med följande tvingade fält:
                   if (entry && !Array.isArray(entry)) {
                     entry.playCount = (entry.playCount || 0) + 1;
                     saveCachedPlaylists(cache);
-                    console.log(`[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`);
+                    console.log(
+                      `[Play Count] Incremented playCount for preset "${presetId}" (cacheKey: "${cacheKey}") to ${entry.playCount}`,
+                    );
                   }
                 }
 
@@ -1244,7 +1362,7 @@ En array av objekt med följande tvingade fält:
       `Musikquiz full-stack server listening on http://localhost:${PORT}`,
     );
     // Pre-cache built-in playlists media in background
-    cacheAllBuiltInPlaylistsMedia().catch(err => {
+    cacheAllBuiltInPlaylistsMedia().catch((err) => {
       console.error("Failed to pre-cache built-in playlists media:", err);
     });
   });

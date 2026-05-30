@@ -14,11 +14,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/playlists.json ./
-
-RUN --mount=type=bind,from=builder,source=/app,target=/mnt/builder \
-  if [ -f /mnt/builder/cached_playlists.json ]; then cp /mnt/builder/cached_playlists.json ./; fi
+COPY --from=builder /app/package.json /app/cached_playlists.json* ./
 
 COPY package.json songs.db* ./
+COPY media/ ./media/
 
 ENV PORT=8080
 EXPOSE 8080
