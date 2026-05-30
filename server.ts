@@ -78,6 +78,7 @@ interface Room {
 
 const SONGS_PER_GAME = 10;
 const MAX_SONGS_PER_LIST = 50;
+const SONGS_PER_GEN = 25;
 
 const playlistsPath = path.join(process.cwd(), "playlists.json");
 let playlistsData: any = { default: [], swedish: [], millennium: [] };
@@ -470,8 +471,8 @@ async function startServer() {
         });
       }
 
-      // Calculate how many songs to fetch. We aim to fetch 15.
-      const fetchAmount = 15;
+      // Calculate how many songs to fetch. We aim to fetch SONGS_PER_GEN.
+      const fetchAmount = SONGS_PER_GEN;
       console.log(`[AI Generation] Fetching ${fetchAmount} songs for theme "${theme}" (existing cached count: ${existingQuestions.length})`);
 
       // Prepare list of existing songs to avoid duplicates
