@@ -10,7 +10,7 @@ test.describe('Musikquiz Game Connectivity', () => {
     const playerPage = await playerContext.newPage();
 
     // The test server should be running on localhost:3000 during test
-    await hostPage.goto('http://localhost:3000/');
+    await hostPage.goto('http://localhost:3333/');
 
     // Click "Starta som Värd (Host)"
     await hostPage.click('button#btn-role-host');
@@ -27,7 +27,7 @@ test.describe('Musikquiz Game Connectivity', () => {
     expect(roomCode.length).toBe(4);
 
     // Now player joins with the room code
-    await playerPage.goto('http://localhost:3000/');
+    await playerPage.goto('http://localhost:3333/');
     await playerPage.click('button#btn-role-player');
     
     // Fill the form on the player page

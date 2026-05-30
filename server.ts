@@ -106,9 +106,10 @@ const PLAYER_COLORS = [
 // Lazy-initialize Gemini API
 let genAI: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
-  if (!genAI && process.env.GEMINI_API_KEY) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY_API;
+  if (!genAI && apiKey) {
     genAI = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: apiKey,
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",

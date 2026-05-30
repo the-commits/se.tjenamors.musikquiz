@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Volume2, Users, Flame, HelpCircle, Triangle, Square, Circle, Play, AlertCircle } from 'lucide-react';
+import { Volume2, Users, Flame, HelpCircle, Triangle, Square, Circle, Play, AlertCircle, Sparkles } from 'lucide-react';
 import YouTube, { YouTubeEvent } from 'react-youtube';
 import { RoomState } from '../types';
 
@@ -22,17 +22,59 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
     setHasVideoError(false);
   }, [currentQuestion]);
 
+  // Automatic timeout for buffering stage to detect unplayable/hanging videos
+  useEffect(() => {
+    let timeoutId: any = null;
+    if (roomState.status === 'buffering') {
+      timeoutId = setTimeout(() => {
+        console.warn("Buffering timeout reached for song:", currentQuestion?.title);
+        setHasVideoError(true);
+        if (onReportUnplayable && currentQuestion?.youtube_link) {
+          onReportUnplayable(currentQuestion.youtube_link);
+        }
+      }, 5000); // 5 seconds timeout to verify playability
+    }
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [roomState.status, currentQuestion, onReportUnplayable]);
+
   const playerRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (roomState.status === 'question' && playerRef.current) {
-      if (playerRef.current.playVideo) {
-        playerRef.current.playVideo();
-      } else if (playerRef.current.play) {
-        playerRef.current.play();
+    if (audioRef.current) {
+      audioRef.current.muted = (roomState.status === 'buffering');
+    }
+    if (roomState.status === 'question') {
+      if (playerRef.current) {
+        if (playerRef.current.unMute) {
+          playerRef.current.unMute();
+        }
+        if (playerRef.current.muted !== undefined) {
+          playerRef.current.muted = false;
+        }
+        if (playerRef.current.playVideo) {
+          playerRef.current.playVideo();
+        } else if (playerRef.current.play) {
+          playerRef.current.play();
+        }
+      }
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.play().catch(e => console.error("Failed to play audio:", e));
       }
     }
   }, [roomState.status]);
+
+  const handleYouTubeReady = (event: any) => {
+    playerRef.current = event.target;
+    if (roomState.status === 'buffering') {
+      event.target.mute();
+    } else {
+      event.target.unMute();
+    }
+  };
 
   const handlePlay = (event: any) => {
     // Save reference for later resuming
@@ -62,13 +104,87 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
     { icon: Play, rotate: 95, color: "bg-emerald-500 hover:bg-emerald-600 border-emerald-700", text: "Grön pil" },
   ];
 
+  if (roomState.status === 'buffering') {
+    return (
+      <div className="flex flex-col h-full items-center justify-center relative min-h-[50vh] text-center select-none w-full">
+        {/* Background Audio Player testing in background */}
+        {currentQuestion && currentQuestion.preview_url ? (
+          <audio
+            ref={audioRef}
+            src={currentQuestion.preview_url}
+            autoPlay
+            muted={true}
+            onError={() => {
+              console.error("Audio Player Error in buffering");
+              setHasVideoError(true);
+              if (onReportUnplayable && currentQuestion?.youtube_link) {
+                onReportUnplayable(currentQuestion.youtube_link);
+              }
+            }}
+            onPlay={handlePlay}
+            className="hidden"
+          />
+        ) : currentQuestion && (
+          <div className="absolute -top-[9999px] -left-[9999px] w-4 h-4 opacity-0 pointer-events-none -z-10">
+            <YouTube
+              videoId={currentQuestion.youtube_link}
+              opts={{
+                height: '10',
+                width: '10',
+                playerVars: {
+                  autoplay: 1,
+                  start: currentQuestion.start_time || 0,
+                  controls: 0,
+                  disablekb: 1,
+                  origin: typeof window !== 'undefined' ? window.location.origin : ''
+                }
+              }}
+              onReady={handleYouTubeReady}
+              onPlay={handlePlay}
+              onError={handleVideoError}
+            />
+          </div>
+        )}
+
+        {/* Gorgeous Loading Splash Screen Card */}
+        <div className="max-w-xl w-full bg-white/10 backdrop-blur-lg border border-white/20 rounded-[40px] p-12 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="w-24 h-24 bg-gradient-to-tr from-pink-500/20 to-cyan-500/20 text-indigo-200 border border-white/10 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl relative animate-pulse">
+            <Sparkles className="w-12 h-12 text-pink-400 animate-spin" style={{ animationDuration: '4s' }} />
+          </div>
+
+          <span className="text-[10px] uppercase tracking-widest text-pink-300 font-black bg-pink-500/20 px-4 py-1.5 rounded-full inline-block mb-3">
+            Fråga {roomState.currentQuestionIndex + 1} av {roomState.questions.length}
+          </span>
+          <h2 className="text-4xl font-black text-white mt-1 mb-4 leading-tight">
+            Genererar fråga...
+          </h2>
+          <p className="text-indigo-200 font-semibold text-lg max-w-sm mx-auto leading-relaxed">
+            Testar spelbarhet och förbereder media innan låten spelas högt.
+          </p>
+
+          {/* Pulse Loading indicator */}
+          <div className="flex gap-2.5 justify-center items-center h-16 mt-8">
+            <div className="w-3.5 h-3.5 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+            <div className="w-3.5 h-3.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+            <div className="w-3.5 h-3.5 bg-yellow-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full gap-8 justify-between relative">
       {/* Background Audio Player */}
       {currentQuestion && currentQuestion.preview_url ? (
         <audio
+          ref={audioRef}
           src={currentQuestion.preview_url}
           autoPlay
+          muted={roomState.status === 'buffering'}
           onError={() => setHasVideoError(true)}
           onPlay={handlePlay}
           className="hidden"
@@ -88,6 +204,7 @@ export default function HostQuestion({ roomState, onRevealAnswer, onReportUnplay
                 origin: typeof window !== 'undefined' ? window.location.origin : ''
               }
             }}
+            onReady={handleYouTubeReady}
             onPlay={handlePlay}
             onError={handleVideoError}
           />

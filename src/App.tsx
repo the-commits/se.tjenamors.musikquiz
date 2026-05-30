@@ -10,6 +10,7 @@ import HostReveal from './components/HostReveal';
 import HostScoreboard from './components/HostScoreboard';
 import PlayerJoin from './components/PlayerJoin';
 import PlayerPlay from './components/PlayerPlay';
+import MediaPreloader from './components/MediaPreloader';
 
 export default function App() {
   // Navigation / Role selection states
@@ -397,6 +398,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="h-full"
             >
+              <MediaPreloader roomState={roomState} onReportUnplayable={handleHostReportUnplayable} />
               {roomState.status === 'lobby' && (
                 <HostLobby
                   roomState={roomState}
