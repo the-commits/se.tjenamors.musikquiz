@@ -92,6 +92,28 @@ const PRESET_QUZZES: Record<string, Question[]> = {
 
 const rooms = new Map<string, Room>();
 
+const cachedPlaylistsPath = path.join(process.cwd(), "cached_playlists.json");
+let lastGenerationTime = 0;
+
+function loadCachedPlaylists(): Record<string, Question[]> {
+  try {
+    if (fs.existsSync(cachedPlaylistsPath)) {
+      return JSON.parse(fs.readFileSync(cachedPlaylistsPath, "utf8"));
+    }
+  } catch (e) {
+    console.error("Failed to load cached_playlists.json", e);
+  }
+  return {};
+}
+
+function saveCachedPlaylists(data: Record<string, Question[]>) {
+  try {
+    fs.writeFileSync(cachedPlaylistsPath, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to save cached_playlists.json", e);
+  }
+}
+
 const PLAYER_COLORS = [
   "bg-violet-500",
   "bg-pink-500",
@@ -223,7 +245,7 @@ async function startServer() {
   // API endpoint to generate quiz questions using AI
   app.post("/api/quiz/generate", async (req, res) => {
     try {
-      const { theme, amount = 6 } = req.body;
+      const { theme } = req.body;
       if (!theme) {
         return res
           .status(400)
@@ -237,8 +259,49 @@ async function startServer() {
         });
       }
 
-      const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt ${amount} frågor. 
-Varje fråga måste representera en känd, mycket populär låt.
+      const cacheKey = theme.trim().toLowerCase();
+      const cache = loadCachedPlaylists();
+      const existingQuestions = cache[cacheKey] || [];
+
+      // If the cache already has 50 or more songs, return cached questions immediately.
+      // This bypasses both the Gemini call and the cooldown check!
+      if (existingQuestions.length >= 50) {
+        console.log(`[Cache Hit] Serving fully loaded playlist for theme: ${theme} (count: ${existingQuestions.length})`);
+        return res.json({ questions: existingQuestions });
+      }
+
+      // Check Cooldown
+      const now = Date.now();
+      const cooldownMs = 15 * 60 * 1000;
+      if (now - lastGenerationTime < cooldownMs) {
+        // If cooldown is active, but we already have at least 10 songs cached for this theme,
+        // we can bypass the cooldown error and serve the cached questions!
+        if (existingQuestions.length >= 10) {
+          console.log(`[Cache Cooldown Bypass] Serving existing cached playlist for theme: ${theme} (count: ${existingQuestions.length}) due to active cooldown.`);
+          return res.json({ questions: existingQuestions });
+        }
+
+        const remainingMs = cooldownMs - (now - lastGenerationTime);
+        const minutes = Math.floor(remainingMs / 60000);
+        const seconds = Math.floor((remainingMs % 60000) / 1000);
+        return res.status(429).json({
+          error: `AI:n återhämtar sig med en Jack & Coke för att orka nästa generering. Försök igen om ${minutes} minuter och ${seconds} sekunder.`,
+        });
+      }
+
+      // Calculate how many songs to fetch. We aim to fetch 15.
+      const fetchAmount = 15;
+      console.log(`[AI Generation] Fetching ${fetchAmount} songs for theme "${theme}" (existing cached count: ${existingQuestions.length})`);
+
+      // Prepare list of existing songs to avoid duplicates
+      const existingSongsStr = existingQuestions.map(q => `${q.artist} - ${q.title}`).join(", ");
+      const avoidInstructions = existingSongsStr 
+        ? `\nVIKTIGT: Undvik att generera följande låtar som redan finns i spellistan: ${existingSongsStr}`
+        : "";
+
+      const prompt = `Skapa ett svenskt musikquiz med temat "${theme}" bestående av exakt ${fetchAmount} frågor. 
+Varje fråga måste representera en känd, mycket populär låt.${avoidInstructions}
+Varje fråga måste representera en unik låt (inte samma som de som listas ovan).
 För varje låt, ge en giltig YouTube-video (video ID, t.ex. 'unfzfe8f9NI' för ABBA Mamma Mia) och en starttid i sekunder där intro eller refräng börjar (t.ex. 30).
 Ge exakt 4 svarsalternativ där ett är rätt.
 
@@ -302,18 +365,50 @@ En array av objekt med följande tvingade fält:
         throw new Error("Ingen text genererad av Gemini");
       }
 
-      const questions = JSON.parse(text);
-      // Map IDs
-      let mappedQuestions = questions.map((q: any, idx: number) => ({
-        ...q,
-        id: `ai_${idx}_${Date.now()}`,
-      }));
+      const newQuestions = JSON.parse(text);
 
-      mappedQuestions = await Promise.all(
-        mappedQuestions.map((q: Question) => enrichWithItunes(q)),
+      // Enrich with iTunes and filter duplicates/invalid
+      const enrichedQuestions = await Promise.all(
+        newQuestions.map(async (q: any, idx: number) => {
+          const enriched = await enrichWithItunes(q);
+          return {
+            ...enriched,
+            id: `ai_${idx}_${Date.now()}`
+          };
+        })
       );
 
-      res.json({ questions: mappedQuestions });
+      // Merge existing and new, avoiding duplicates by YouTube Link or Title/Artist matching
+      const mergedQuestions = [...existingQuestions];
+      for (const newQ of enrichedQuestions) {
+        const isDuplicate = mergedQuestions.some(
+          eq => eq.youtube_link === newQ.youtube_link || 
+          (eq.artist.toLowerCase() === newQ.artist.toLowerCase() && eq.title.toLowerCase() === newQ.title.toLowerCase())
+        );
+        if (!isDuplicate && newQ.youtube_link) {
+          mergedQuestions.push(newQ);
+        }
+      }
+
+      // Check min size: "alltid ha minst 10 låtar i listan"
+      if (mergedQuestions.length < 10) {
+        throw new Error(`Kunde inte generera tillräckligt många unika låtar (har bara ${mergedQuestions.length}, kräver minst 10).`);
+      }
+
+      // Cap at 50 options: "tills en lista har 50 alternativ"
+      if (mergedQuestions.length > 50) {
+        mergedQuestions.splice(50);
+      }
+
+      // Save updated list to cache
+      cache[cacheKey] = mergedQuestions;
+      saveCachedPlaylists(cache);
+
+      // Successfully generated, update lastGenerationTime
+      lastGenerationTime = Date.now();
+      console.log(`[AI Generation Success] Playlist for theme "${theme}" now has ${mergedQuestions.length} songs. Cooldown triggered.`);
+
+      res.json({ questions: mergedQuestions });
     } catch (err: any) {
       console.error("AI Generation error:", err);
       res.status(500).json({

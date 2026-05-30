@@ -11,3 +11,4 @@ coverage/
 .antigravity/
 test-results/
 playwright-report/
+cached_playlists.json
