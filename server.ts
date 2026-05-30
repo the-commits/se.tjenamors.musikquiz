@@ -646,7 +646,7 @@ async function startServer() {
 
       // Check Cooldown
       const now = Date.now();
-      const cooldownMs = 15 * 60 * 1000;
+      const cooldownMs = 120 * 60 * 1000;
       if (now - lastGenerationTime < cooldownMs) {
         // If cooldown is active, but we already have at least SONGS_PER_GAME songs cached for this theme,
         // we can bypass the cooldown error and serve the cached questions!
