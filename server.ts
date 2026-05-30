@@ -232,8 +232,7 @@ async function startServer() {
       const client = getGeminiClient();
       if (!client) {
         return res.status(403).json({
-          error:
-            "Gemini API-nyckel saknas. Konfigurera din API-nyckel i Settings > Secrets.",
+          error: "API genereringen är inte aktivt",
         });
       }
 
@@ -316,12 +315,10 @@ En array av objekt med följande tvingade fält:
       res.json({ questions: mappedQuestions });
     } catch (err: any) {
       console.error("AI Generation error:", err);
-      res
-        .status(500)
-        .json({
-          error: "Kunde inte generera quiz med AI. Fallback till standardval.",
-          details: err.message,
-        });
+      res.status(500).json({
+        error: "Kunde inte generera quiz med AI. Fallback till standardval.",
+        details: err.message,
+      });
     }
   });
 
