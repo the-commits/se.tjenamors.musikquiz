@@ -15,8 +15,8 @@ let db: Database;
 // Initialize SQLite DB
 async function initDb() {
   db = await open({
-    filename: './songs.db',
-    driver: sqlite3.Database
+    filename: "./songs.db",
+    driver: sqlite3.Database,
   });
   await db.exec(`
     CREATE TABLE IF NOT EXISTS songs (
@@ -50,7 +50,13 @@ interface Player {
   color: string;
 }
 
-type RoomStatus = 'lobby' | 'countdown' | 'question' | 'slow_reveal' | 'scoreboard' | 'ended';
+type RoomStatus =
+  | "lobby"
+  | "countdown"
+  | "question"
+  | "slow_reveal"
+  | "scoreboard"
+  | "ended";
 
 interface Room {
   code: string;
@@ -81,7 +87,7 @@ const DEFAULT_QUESTIONS: Question[] = playlistsData.default || [];
 
 const PRESET_QUZZES: Record<string, Question[]> = {
   swedish: playlistsData.swedish || [],
-  millennium: playlistsData.millennium || []
+  millennium: playlistsData.millennium || [],
 };
 
 const rooms = new Map<string, Room>();
@@ -105,9 +111,9 @@ function getGeminiClient(): GoogleGenAI | null {
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
         headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
+          "User-Agent": "aistudio-build",
+        },
+      },
     });
   }
   return genAI;
@@ -116,7 +122,9 @@ function getGeminiClient(): GoogleGenAI | null {
 async function enrichWithItunes(q: Question): Promise<Question> {
   try {
     const query = encodeURIComponent(`${q.artist} ${q.title}`);
-    const res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${query}&entity=song&limit=1`,
+    );
     const data = await res.json();
     if (data.results && data.results.length > 0) {
       const track = data.results[0];
@@ -125,7 +133,7 @@ async function enrichWithItunes(q: Question): Promise<Question> {
       }
       if (track.artworkUrl100) {
         // Get a slightly larger cover if possible
-        q.cover_url = track.artworkUrl100.replace('100x100bb', '600x600bb');
+        q.cover_url = track.artworkUrl100.replace("100x100bb", "600x600bb");
       }
     }
   } catch (error) {
@@ -144,7 +152,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 function generateRoomCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890*@$&";
   let code = "";
   do {
     code = "";
@@ -157,12 +165,12 @@ function generateRoomCode(): string {
 
 function broadcastToRoom(room: Room, message: any) {
   const payload = JSON.stringify(message);
-  
+
   // Send to host
   if (room.hostSocket && room.hostSocket.readyState === WebSocket.OPEN) {
     room.hostSocket.send(payload);
   }
-  
+
   // Send to all players
   for (const [playerId, socket] of room.playerSockets.entries()) {
     if (socket.readyState === WebSocket.OPEN) {
@@ -187,7 +195,12 @@ function sendRoomState(room: Room) {
       start_time: q.start_time,
       options: q.options,
       // Hide correct index if we are currently mid-question to prevent cheating
-      correct_index: (room.status === 'slow_reveal' || room.status === 'scoreboard' || room.status === 'ended') ? q.correct_index : -1
+      correct_index:
+        room.status === "slow_reveal" ||
+        room.status === "scoreboard" ||
+        room.status === "ended"
+          ? q.correct_index
+          : -1,
     })),
     currentQuestionIndex: room.currentQuestionIndex,
     questionTimer: room.questionTimer,
@@ -198,7 +211,7 @@ function sendRoomState(room: Room) {
 
   broadcastToRoom(room, {
     type: "room_state",
-    state: statePayload
+    state: statePayload,
   });
 }
 
@@ -211,13 +224,16 @@ async function startServer() {
     try {
       const { theme, amount = 6 } = req.body;
       if (!theme) {
-        return res.status(400).json({ error: "Ett tema krävs för AI-generering." });
+        return res
+          .status(400)
+          .json({ error: "Ett tema krävs för AI-generering." });
       }
 
       const client = getGeminiClient();
       if (!client) {
-        return res.status(403).json({ 
-          error: "Gemini API-nyckel saknas. Konfigurera din API-nyckel i Settings > Secrets." 
+        return res.status(403).json({
+          error:
+            "Gemini API-nyckel saknas. Konfigurera din API-nyckel i Settings > Secrets.",
         });
       }
 
@@ -249,19 +265,36 @@ En array av objekt med följande tvingade fält:
               properties: {
                 artist: { type: Type.STRING },
                 title: { type: Type.STRING },
-                youtube_link: { type: Type.STRING, description: "11-char YouTube Video ID. PREFER LYRIC VIDEOS or AUDIO ONLY (non-official) to ensure they allow embedding. Avoid VEVO if possible." },
-                start_time: { type: Type.INTEGER, description: "Start time offset in seconds" },
+                youtube_link: {
+                  type: Type.STRING,
+                  description:
+                    "11-char YouTube Video ID. PREFER LYRIC VIDEOS or AUDIO ONLY (non-official) to ensure they allow embedding. Avoid VEVO if possible.",
+                },
+                start_time: {
+                  type: Type.INTEGER,
+                  description: "Start time offset in seconds",
+                },
                 options: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: "Exactly 4 options, including the correct one"
+                  description: "Exactly 4 options, including the correct one",
                 },
-                correct_index: { type: Type.INTEGER, description: "0-3 index of correct answer in options array" }
+                correct_index: {
+                  type: Type.INTEGER,
+                  description: "0-3 index of correct answer in options array",
+                },
               },
-              required: ["artist", "title", "youtube_link", "start_time", "options", "correct_index"]
-            }
-          }
-        }
+              required: [
+                "artist",
+                "title",
+                "youtube_link",
+                "start_time",
+                "options",
+                "correct_index",
+              ],
+            },
+          },
+        },
       });
 
       const text = response.text;
@@ -273,15 +306,22 @@ En array av objekt med följande tvingade fält:
       // Map IDs
       let mappedQuestions = questions.map((q: any, idx: number) => ({
         ...q,
-        id: `ai_${idx}_${Date.now()}`
+        id: `ai_${idx}_${Date.now()}`,
       }));
 
-      mappedQuestions = await Promise.all(mappedQuestions.map((q: Question) => enrichWithItunes(q)));
+      mappedQuestions = await Promise.all(
+        mappedQuestions.map((q: Question) => enrichWithItunes(q)),
+      );
 
       res.json({ questions: mappedQuestions });
     } catch (err: any) {
       console.error("AI Generation error:", err);
-      res.status(500).json({ error: "Kunde inte generera quiz med AI. Fallback till standardval.", details: err.message });
+      res
+        .status(500)
+        .json({
+          error: "Kunde inte generera quiz med AI. Fallback till standardval.",
+          details: err.message,
+        });
     }
   });
 
@@ -304,7 +344,7 @@ En array av objekt med följande tvingade fält:
     ws.on("message", async (rawMessage) => {
       try {
         const message = JSON.parse(rawMessage.toString());
-        
+
         switch (message.type) {
           case "host_create": {
             isHostConnection = true;
@@ -313,16 +353,26 @@ En array av objekt med följande tvingade fält:
 
             if (message.preset && PRESET_QUZZES[message.preset]) {
               finalQuestions = PRESET_QUZZES[message.preset];
-            } else if (message.customQuestions && Array.isArray(message.customQuestions) && message.customQuestions.length > 0) {
+            } else if (
+              message.customQuestions &&
+              Array.isArray(message.customQuestions) &&
+              message.customQuestions.length > 0
+            ) {
               finalQuestions = message.customQuestions;
             }
 
             // Preset questions are pre-enriched in playlists.json. Custom ones are enriched during generation.
             if (!message.customQuestions) {
               // Filter out known unplayable songs
-              const unplayableRows = await db.all('SELECT youtube_link FROM songs WHERE playable = 0');
-              const unplayableSet = new Set(unplayableRows.map(r => r.youtube_link));
-              finalQuestions = finalQuestions.filter(q => !q.youtube_link || !unplayableSet.has(q.youtube_link));
+              const unplayableRows = await db.all(
+                "SELECT youtube_link FROM songs WHERE playable = 0",
+              );
+              const unplayableSet = new Set(
+                unplayableRows.map((r) => r.youtube_link),
+              );
+              finalQuestions = finalQuestions.filter(
+                (q) => !q.youtube_link || !unplayableSet.has(q.youtube_link),
+              );
             }
 
             // Shuffle questions and options
@@ -341,7 +391,7 @@ En array av objekt med följande tvingade fält:
 
             const newRoom: Room = {
               code,
-              status: 'lobby',
+              status: "lobby",
               players: [],
               questions: questions,
               backupQuestions: backupQuestions,
@@ -358,11 +408,13 @@ En array av objekt med följande tvingade fält:
             rooms.set(code, newRoom);
             currentRoomCode = code;
 
-            ws.send(JSON.stringify({
-              type: "host_created",
-              roomCode: code,
-              questions: finalQuestions
-            }));
+            ws.send(
+              JSON.stringify({
+                type: "host_created",
+                roomCode: code,
+                questions: finalQuestions,
+              }),
+            );
 
             sendRoomState(newRoom);
             break;
@@ -375,15 +427,22 @@ En array av objekt med följande tvingade fält:
 
             const youtubeLink = message.youtube_link;
             if (youtubeLink) {
-              console.log(`[Host Report] Song unplayable, marking in DB: ${youtubeLink}`);
+              console.log(
+                `[Host Report] Song unplayable, marking in DB: ${youtubeLink}`,
+              );
               // Insert or update DB
-              await db.run('INSERT OR REPLACE INTO songs (youtube_link, playable) VALUES (?, 0)', [youtubeLink]);
-              
+              await db.run(
+                "INSERT OR REPLACE INTO songs (youtube_link, playable) VALUES (?, 0)",
+                [youtubeLink],
+              );
+
               // Find the current question and replace it with the next one from backup if available
               if (room.backupQuestions && room.backupQuestions.length > 0) {
                 const replacement = room.backupQuestions.shift()!;
                 room.questions[room.currentQuestionIndex] = replacement;
-                console.log(`[Host Report] Replaced question with: ${replacement.title}`);
+                console.log(
+                  `[Host Report] Replaced question with: ${replacement.title}`,
+                );
                 // Re-broadcast state so the client reloads the YouTube iframe
                 sendRoomState(room);
               }
@@ -394,14 +453,21 @@ En array av objekt med följande tvingade fält:
           case "player_join": {
             const { roomCode, name, playerId: requestedPlayerId } = message;
             const room = rooms.get(roomCode?.toUpperCase());
-            
+
             if (!room) {
-              ws.send(JSON.stringify({ type: "error", message: "Hittade inte rummet. Kontrollera PIN-koden!" }));
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "Hittade inte rummet. Kontrollera PIN-koden!",
+                }),
+              );
               return;
             }
 
             currentRoomCode = room.code;
-            playerId = requestedPlayerId || `p_${Math.random().toString(36).substr(2, 9)}`;
+            playerId =
+              requestedPlayerId ||
+              `p_${Math.random().toString(36).substr(2, 9)}`;
 
             // Check if player is already in room (reconnection)
             let player = room.players.find((p) => p.id === playerId);
@@ -414,7 +480,8 @@ En array av objekt med följande tvingade fält:
                 hasAnswered: false,
                 lastAnswerCorrect: null,
                 lastAnswerPoints: 0,
-                color: PLAYER_COLORS[room.players.length % PLAYER_COLORS.length]
+                color:
+                  PLAYER_COLORS[room.players.length % PLAYER_COLORS.length],
               };
               room.players.push(player);
             }
@@ -422,11 +489,13 @@ En array av objekt med följande tvingade fält:
             // Save player socket
             room.playerSockets.set(playerId!, ws);
 
-            ws.send(JSON.stringify({
-              type: "join_success",
-              playerId: playerId!,
-              roomCode: room.code
-            }));
+            ws.send(
+              JSON.stringify({
+                type: "join_success",
+                playerId: playerId!,
+                roomCode: room.code,
+              }),
+            );
 
             sendRoomState(room);
             break;
@@ -436,10 +505,10 @@ En array av objekt med följande tvingade fält:
             const room = rooms.get(currentRoomCode || "");
             if (!room || !isHostConnection) return;
 
-            room.status = 'buffering';
+            room.status = "buffering";
             room.currentQuestionIndex = 0;
             room.answersCount = 0;
-            
+
             // Clean up old timers
             if (room.timerIntervalId) {
               clearInterval(room.timerIntervalId);
@@ -452,26 +521,27 @@ En array av objekt med följande tvingade fält:
 
           case "host_media_ready": {
             const room = rooms.get(currentRoomCode || "");
-            if (!room || !isHostConnection || room.status !== 'buffering') return;
-            
+            if (!room || !isHostConnection || room.status !== "buffering")
+              return;
+
             // Only show 5-second countdown for the very first question
             if (room.currentQuestionIndex === 0) {
-                room.status = 'countdown';
-                room.countdown = 5;
-                if (room.timerIntervalId) clearInterval(room.timerIntervalId);
-                sendRoomState(room);
-                room.timerIntervalId = setInterval(() => {
-                  room.countdown--;
-                  if (room.countdown <= 0) {
-                    clearInterval(room.timerIntervalId!);
-                    room.timerIntervalId = null;
-                    startQuestion(room);
-                  } else {
-                    sendRoomState(room);
-                  }
-                }, 1000);
+              room.status = "countdown";
+              room.countdown = 5;
+              if (room.timerIntervalId) clearInterval(room.timerIntervalId);
+              sendRoomState(room);
+              room.timerIntervalId = setInterval(() => {
+                room.countdown--;
+                if (room.countdown <= 0) {
+                  clearInterval(room.timerIntervalId!);
+                  room.timerIntervalId = null;
+                  startQuestion(room);
+                } else {
+                  sendRoomState(room);
+                }
+              }, 1000);
             } else {
-                startQuestion(room);
+              startQuestion(room);
             }
             break;
           }
@@ -481,7 +551,8 @@ En array av objekt med följande tvingade fält:
             if (!room || !playerId) return;
 
             const player = room.players.find((p) => p.id === playerId);
-            if (!player || player.hasAnswered || room.status !== 'question') return;
+            if (!player || player.hasAnswered || room.status !== "question")
+              return;
 
             const { answerIndex } = message;
             const currentQuestion = room.questions[room.currentQuestionIndex];
@@ -502,16 +573,23 @@ En array av objekt med följande tvingade fält:
             room.answersCount++;
 
             // Send feedback to this specific player immediately
-            ws.send(JSON.stringify({
-              type: "answer_result",
-              isCorrect,
-              points,
-              correctIndex: currentQuestion.correct_index
-            }));
+            ws.send(
+              JSON.stringify({
+                type: "answer_result",
+                isCorrect,
+                points,
+                correctIndex: currentQuestion.correct_index,
+              }),
+            );
 
             // If all players have answered, transit immediately
-            const activeConnectedPlayersCount = Array.from(room.playerSockets.keys()).length;
-            if (room.answersCount >= room.players.length || room.answersCount >= activeConnectedPlayersCount) {
+            const activeConnectedPlayersCount = Array.from(
+              room.playerSockets.keys(),
+            ).length;
+            if (
+              room.answersCount >= room.players.length ||
+              room.answersCount >= activeConnectedPlayersCount
+            ) {
               endQuestion(room);
             } else {
               sendRoomState(room);
@@ -530,20 +608,20 @@ En array av objekt med följande tvingade fält:
             const room = rooms.get(currentRoomCode || "");
             if (!room || !isHostConnection) return;
 
-            if (room.status === 'slow_reveal') {
+            if (room.status === "slow_reveal") {
               // Transition to Scoreboard page for this question
-              room.status = 'scoreboard';
+              room.status = "scoreboard";
               sendRoomState(room);
-            } else if (room.status === 'scoreboard') {
+            } else if (room.status === "scoreboard") {
               // Transition to next question
               room.currentQuestionIndex++;
               if (room.currentQuestionIndex >= room.questions.length) {
-                room.status = 'ended';
+                room.status = "ended";
                 sendRoomState(room);
               } else {
-                room.status = 'buffering';
+                room.status = "buffering";
                 room.answersCount = 0;
-                
+
                 // Clear state for all players
                 room.players.forEach((p) => {
                   p.hasAnswered = false;
@@ -574,8 +652,13 @@ En array av objekt med följande tvingade fält:
           // Delay clean up slightly in case host refreshes
           setTimeout(() => {
             const updatedRoom = rooms.get(currentRoomCode!);
-            if (updatedRoom && (!updatedRoom.hostSocket || updatedRoom.hostSocket.readyState !== WebSocket.OPEN)) {
-              if (updatedRoom.timerIntervalId) clearInterval(updatedRoom.timerIntervalId);
+            if (
+              updatedRoom &&
+              (!updatedRoom.hostSocket ||
+                updatedRoom.hostSocket.readyState !== WebSocket.OPEN)
+            ) {
+              if (updatedRoom.timerIntervalId)
+                clearInterval(updatedRoom.timerIntervalId);
               // Broadcast room_closed to all players so they get booted back to the start screen
               broadcastToRoom(updatedRoom, { type: "room_closed" });
               rooms.delete(currentRoomCode!);
@@ -595,10 +678,10 @@ En array av objekt med följande tvingade fält:
   });
 
   function startQuestion(room: Room) {
-    room.status = 'question';
+    room.status = "question";
     room.questionTimer = room.questionDuration;
     room.answersCount = 0;
-    
+
     room.players.forEach((p) => {
       p.hasAnswered = false;
       p.lastAnswerCorrect = null;
@@ -624,23 +707,27 @@ En array av objekt med följande tvingade fält:
       room.timerIntervalId = null;
     }
 
-    room.status = 'slow_reveal';
-    
+    room.status = "slow_reveal";
+
     // Fill in no-answers for slow players, and explicit feedback so they don't get stuck
     room.players.forEach((p) => {
       if (!p.hasAnswered) {
         p.hasAnswered = true;
         p.lastAnswerCorrect = false;
         p.lastAnswerPoints = 0;
-        
+
         const socket = room.playerSockets.get(p.id);
-        if (socket && socket.readyState === 1) { // WebSocket.OPEN
-          socket.send(JSON.stringify({
-            type: "player_feedback",
-            isCorrect: false,
-            points: 0,
-            correctIndex: room.questions[room.currentQuestionIndex].correct_index
-          }));
+        if (socket && socket.readyState === 1) {
+          // WebSocket.OPEN
+          socket.send(
+            JSON.stringify({
+              type: "player_feedback",
+              isCorrect: false,
+              points: 0,
+              correctIndex:
+                room.questions[room.currentQuestionIndex].correct_index,
+            }),
+          );
         }
       }
     });
@@ -664,7 +751,9 @@ En array av objekt med följande tvingade fält:
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Musikquiz full-stack server listening on http://localhost:${PORT}`);
+    console.log(
+      `Musikquiz full-stack server listening on http://localhost:${PORT}`,
+    );
   });
 }
 
