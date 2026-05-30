@@ -14,7 +14,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-COPY package*.json ./
+RUN if [ -f /app/cached_playlists.json ]; then cp /app/cached_playlists.json ./; fi
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
